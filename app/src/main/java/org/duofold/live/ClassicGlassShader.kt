@@ -29,6 +29,7 @@ internal object ClassicGlassShader {
  uniform float blurStrength;
  uniform float seamOffset;
  uniform float reflectedCover;
+ uniform float windowReveal;
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -47,6 +48,12 @@ internal object ClassicGlassShader {
   float corrected=mix(projected,1.0-projected,reverse);
   float2 sourceUV=uv;
   if(horizontal>0.5) sourceUV.y=corrected; else sourceUV.x=corrected;
+  // V2: the content is a stationary plane behind the glass, not a texture
+  // attached to the rotating panel. Preserve its crop and scale at every angle.
+  if(windowReveal>0.5){
+   sourceUV=uv;
+   edge=inner>0.5 ? (fallback>0.5 ? 1.0-axis : 1.0-2.0*axis) : axis;
+  }
   float seamMask=0.0;
   if(inner>0.5 && fallback<0.5 && seamOffset>0.0){
    seamMask=1.0-smoothstep(max(0.5,0.5+seamOffset-0.05),0.5+seamOffset,axis);
