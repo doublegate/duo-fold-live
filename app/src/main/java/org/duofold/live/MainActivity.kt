@@ -172,7 +172,7 @@ class MainActivity:ComponentActivity(){
        if(advanced){
         Text("Screen placement",style=MaterialTheme.typography.titleMedium)
         for((v2,label) in listOf(false to "Original",true to "V2 Window Reveal · experimental"))TextButton(onClick={windowReveal=v2;prefs.edit().putBoolean("window_reveal_v2",v2).apply();restart()}){Text((if(windowReveal==v2)"✓ " else "")+label)}
-        Text("V2 retains hinge-driven folding perspective with a head-on projection, removing the initial inward squeeze. Applies to every animation style, in both directions. Original preserves the existing projection.",style=MaterialTheme.typography.bodySmall)
+        Text("V2 corrects only the initial sideways squeeze. Original top/bottom perspective, folding motion and later projection remain intact. Applies to every animation style in both directions.",style=MaterialTheme.typography.bodySmall)
 
         Toggle("Anti-aliasing",antialias){antialias=it;booleanSetting("antialias_enabled",it)}
         if(antialias){
