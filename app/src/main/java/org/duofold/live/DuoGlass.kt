@@ -82,11 +82,11 @@ internal object DuoGlassShader {
   float corrected=mix(mapped,1.0-mapped,reverse);
   float projectedAcross=1.0-(projectedY-(0.34562-5.8974))/11.1035;
   float2 sourceUV=horizontal>0.5 ? float2(projectedAcross,corrected) : float2(corrected,projectedAcross);
-  // V2 changes only sideways overshoot. Keep the original projectedAcross,
+  // V2 reflects early cover overshoot outward. Keep original projectedAcross,
   // edge shading and perspective; once sampling is within the flat footprint,
   // the original mapping passes through exactly (no angle/timing remap).
   if(windowReveal>0.5){
-   float limited=inner>0.5 ? max(mapped,axis) : min(mapped,axis);
+   float limited=inner>0.5 ? max(mapped,axis) : mapped-2.0*max(mapped-axis,0.0);
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }

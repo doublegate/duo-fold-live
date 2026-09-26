@@ -48,10 +48,10 @@ internal object ClassicGlassShader {
   float corrected=mix(projected,1.0-projected,reverse);
   float2 sourceUV=uv;
   if(horizontal>0.5) sourceUV.y=corrected; else sourceUV.x=corrected;
-  // Clamp only perspective overshoot away from the fixed hinge.
+  // Reflect early cover overshoot outward; keep the existing inner correction.
   // All original coordinates pass through after the initial compression.
   if(windowReveal>0.5){
-   float limited=axis<hinge ? max(projected,axis) : min(projected,axis);
+   float limited=inner<0.5 ? projected-2.0*max(projected-axis,0.0) : (axis<hinge ? max(projected,axis) : min(projected,axis));
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }
