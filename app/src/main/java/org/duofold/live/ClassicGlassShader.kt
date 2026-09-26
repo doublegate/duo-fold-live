@@ -48,11 +48,16 @@ internal object ClassicGlassShader {
   float corrected=mix(projected,1.0-projected,reverse);
   float2 sourceUV=uv;
   if(horizontal>0.5) sourceUV.y=corrected; else sourceUV.x=corrected;
-  // V2: the content is a stationary plane behind the glass, not a texture
-  // attached to the rotating panel. Preserve its crop and scale at every angle.
+  // V2 uses a head-on (orthographic) ray onto the flat backing plane.
+  // Retain hinge foreshortening, but remove camera-depth magnification that
+  // initially samples beyond the cover edge and squeezes the image inward.
   if(windowReveal>0.5){
+   float hingeV2=inner>0.5 ? (fallback>0.5 ? 1.0 : 0.5) : 0.0;
+   float mappedV2=hingeV2+(axis-hingeV2)*cos(a);
+   float correctedV2=mix(mappedV2,1.0-mappedV2,reverse);
    sourceUV=uv;
-   edge=inner>0.5 ? (fallback>0.5 ? 1.0-axis : 1.0-2.0*axis) : axis;
+   if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
+   edge=inner>0.5 ? (fallback>0.5 ? 1.0-mappedV2 : 1.0-2.0*mappedV2) : mappedV2;
   }
   float seamMask=0.0;
   if(inner>0.5 && fallback<0.5 && seamOffset>0.0){
