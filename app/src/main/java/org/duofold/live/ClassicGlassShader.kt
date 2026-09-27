@@ -29,6 +29,25 @@ internal object ClassicGlassShader {
  uniform float blurStrength;
  uniform float seamOffset;
  uniform float reflectedCover;
+ uniform float windowReveal;
+ uniform float earlyStretch;
+ uniform float endStretch;
+ uniform float startupEasing;
+ float coverAt(float x,float t){
+  return x*cos(t)*40.0/max(1.0,40.0-x*15.7987*sin(t));
+ }
+ float earlyCover(float x,float t,float original){
+  float joinAngle=1.5;
+  if(t>=joinAngle)return original;
+  float end=coverAt(x,joinAngle),distance=max(0.0,x-end);
+  float endSlope=-(coverAt(x,joinAngle+0.0001)-coverAt(x,joinAngle-0.0001))/0.0002*joinAngle;
+  // Slider preserves the original 0–100% scale and extrapolates to 300%.
+  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,3.0));
+  float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
+  float stretch=(u3-2.0*u2+u)*startSlope+(-2.0*u3+3.0*u2)*distance+(u3-u2)*endSlope;
+  return x-stretch;
+ }
+
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -47,11 +66,22 @@ internal object ClassicGlassShader {
   float corrected=mix(projected,1.0-projected,reverse);
   float2 sourceUV=uv;
   if(horizontal>0.5) sourceUV.y=corrected; else sourceUV.x=corrected;
+  // Advance cover stretch continuously; keep the existing inner correction.
+  // Original coordinates pass through beyond the early-curve join.
+  if(windowReveal>0.5){
+   float limited=inner<0.5 ? earlyCover(axis,a,projected) : (axis<hinge ? max(projected,axis) : min(projected,axis));
+   if(inner<0.5)limited/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,a));
+   float correctedV2=mix(limited,1.0-limited,reverse);
+   if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
+  }
   float seamMask=0.0;
   if(inner>0.5 && fallback<0.5 && seamOffset>0.0){
    seamMask=1.0-smoothstep(max(0.5,0.5+seamOffset-0.05),0.5+seamOffset,axis);
    if(axis>=0.5)sourceUV=uv;
   }
+  // Cover startup: reach opacity before separating the captured image from
+  // the live image below it. Smooth geometry only within the first few degrees.
+  if(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
   sourceUV=sourceUV*sampleScale+sampleOffset;
   float blurEdge=edge;
   if(inner>0.5 && fallback<0.5)blurEdge=(edge+2.0*seamOffset)/(1.0+2.0*seamOffset);
@@ -76,7 +106,7 @@ internal object ClassicGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,0.035,progress);
+  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }

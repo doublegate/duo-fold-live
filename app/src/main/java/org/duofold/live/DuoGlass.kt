@@ -42,6 +42,29 @@ internal object DuoGlassShader {
  uniform float blurStrength;
  uniform float seamOffset;
  uniform float reflectedCover;
+ uniform float windowReveal;
+ uniform float earlyStretch;
+ uniform float endStretch;
+ uniform float startupEasing;
+ float coverAt(float x,float t){
+  float a=3.141592654-t,c=cos(a),sn=sin(a);
+  float hx=-0.23396,hz=-0.550084,px=hx-x*7.73936;
+  float anchor=(c*hx+sn*hz)*(-39.75052)/(-sn*hx+c*hz+0.275454-40.0);
+  float point=(c*px+sn*hz)*(-39.75052)/(-sn*px+c*hz+0.275454-40.0);
+  return (point-anchor)/(7.73936*39.75052/39.174462);
+ }
+ float earlyCover(float x,float t,float original){
+  float joinAngle=1.047197551;
+  if(t>=joinAngle)return original;
+  float end=coverAt(x,joinAngle),distance=max(0.0,x-end);
+  float endSlope=-(coverAt(x,joinAngle+0.0001)-coverAt(x,joinAngle-0.0001))/0.0002*joinAngle;
+  // Slider preserves the original 0–100% scale and extrapolates to 300%.
+  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,3.0));
+  float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
+  float stretch=(u3-2.0*u2+u)*startSlope+(-2.0*u3+3.0*u2)*distance+(u3-u2)*endSlope;
+  return x-stretch;
+ }
+
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -81,11 +104,23 @@ internal object DuoGlassShader {
   float corrected=mix(mapped,1.0-mapped,reverse);
   float projectedAcross=1.0-(projectedY-(0.34562-5.8974))/11.1035;
   float2 sourceUV=horizontal>0.5 ? float2(projectedAcross,corrected) : float2(corrected,projectedAcross);
+  // V2 smoothly advances cover stretch. Keep original projectedAcross,
+  // edge shading and perspective. Beyond the early-curve join, the original
+  // horizontal mapping passes through exactly.
+  if(windowReveal>0.5){
+   float limited=inner>0.5 ? max(mapped,axis) : earlyCover(axis,3.141592654-a,mapped);
+   if(inner<0.5)limited/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,3.141592654-a));
+   float correctedV2=mix(limited,1.0-limited,reverse);
+   if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
+  }
   float seamMask=0.0;
   if(inner>0.5 && fallback<0.5 && seamOffset>0.0){
    seamMask=1.0-smoothstep(max(0.5,0.5+seamOffset-0.05),0.5+seamOffset,axis);
    if(axis>=0.5)sourceUV=uv;
   }
+  // Cover startup: reach opacity before separating the captured image from
+  // the live image below it. Smooth geometry only within the first few degrees.
+  if(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
   sourceUV=sourceUV*sampleScale+sampleOffset;
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
@@ -113,7 +148,7 @@ internal object DuoGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,0.035,progress);
+  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }
@@ -147,7 +182,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private val angleListener=LiveAngles.Listener { value,_ ->
   if(value.isFinite() && value!=targetAngle){targetAngle=value;requestDraw()}
  }
- private var frozen=false;private var frame:GlassFrame?=null;private var amount=0f;private var intensity=.5f;private var inner=false;private var rotation=0
+ private var frozen=false;private var frame:GlassFrame?=null;private var amount=0f;private var intensity=1f;private var inner=false;private var rotation=0
  private val basePaint=Paint(Paint.FILTER_BITMAP_FLAG)
  private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
  private var program:RuntimeShader?=null
@@ -205,6 +240,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    dirty=false
    if(!preview && targetAngle.isFinite() && LiveAngles.fresh()){
     val dt=if(lastFrameNanos==0L)8.33f else ((now-lastFrameNanos)/1_000_000f).coerceIn(1f,50f)
+    if(!renderedAngle.isFinite() && !inner && targetAngle<=12f && context.getSharedPreferences("standalone",0).getBoolean("window_reveal_v2",true) && context.getSharedPreferences("standalone",0).getBoolean("startup_easing",true))renderedAngle=0f
     renderedAngle=FrameSmoothing.step(renderedAngle,targetAngle,dt,smoothingMs)
     hingeAngle=renderedAngle
     amount=if(inner && targetAngle>=FoldThreshold.sanitize(openThreshold))0f
@@ -294,6 +330,10 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
+     shader.setFloatUniform("earlyStretch",quality.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else 2.7f})
+     shader.setFloatUniform("endStretch",if(quality.getBoolean("enhanced_end_stretch",true))quality.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f} else .8f)
+     shader.setFloatUniform("startupEasing",if(quality.getBoolean("startup_easing",true))1f else 0f)
+     shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
      shader.setFloatUniform("texSize",f.bitmap.width.toFloat(),f.bitmap.height.toFloat())

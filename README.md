@@ -1,8 +1,8 @@
 ![DuoFold Live](docs/assets/duofold-live-logo.svg)
 
-# Duo Fold Live · 3.5.0
+# Duo Fold Live · 3.5.1
 
-**Current official release: 3.5.0.** Occasional unlock wallpaper flashing and Keep Awake remain known issues. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
+**Current official release: 3.5.1.** Occasional unlock wallpaper flashing and Keep Awake remain known issues. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
 
 ## 📺 Step-by-step installation tutorial
 **New here? [Watch the full setup walkthrough on YouTube](https://www.youtube.com/watch?v=8Ucm7ceBDN4).**
@@ -11,7 +11,7 @@ Created by a Duo Fold Live user—not by me. Huge thanks for putting this togeth
 
 An iPhone Duo-inspired folding animation for the **Samsung Galaxy Z Fold 8**, with windowed glass, live cover previews, and smooth black fades around Samsung’s display handoff. Free and open source. Runs over One UI and ordinary apps without replacing your launcher.
 
-**[Download 3.5.0](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.0 release notes](docs/3.5.0-CHANGELOG.md) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
+**[Download 3.5.1](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.1 release notes](docs/3.5.1-CHANGELOG.md) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
 
 **Only tested on the Z Fold 8 (SM-F971U).** Fold 8 Ultra, Fold 7, and other devices are unverified. Do not expect compatibility. Model recognition includes regional SM-F971, SM-F976, and SM-F966 families. Unknown models display a warning and may proceed. Android 17 and the existing Samsung wallpaper/API checks are still required. Recognition is not verified compatibility.
 
@@ -48,7 +48,9 @@ The app guides setup. Samsung’s interactive wallpaper and Shizuku running in A
 
 ### Tune the look and motion
 
-- **Motion smoothness, blur amount, and glass strength** have separate controls and reset buttons. Defaults: 30 ms, 30%, and 50% respectively.
+- **V2 Window Reveal · experimental** is the default projection, with Original available for comparison. Early stretch defaults to 90%; startup easing is on and toggleable. Enhanced end stretch defaults to 125%, adjustable from 80–150%.
+
+- **Motion smoothness, blur amount, and glass strength** have separate controls and reset buttons. Defaults: 30 ms, 30%, and 100% respectively.
 - **Black fade smoothing and gradualness** let you shape the transition around Samsung’s display switch.
 - **Manual live-content targets:** 120 FPS experimental by default, or 60 FPS for lower GPU cost. No automatic switching based on the display’s reported refresh rate. These are targets, not guaranteed frame rates.
 - **Three anti-aliasing methods** in Advanced: **Lightweight Texture Filtering** (default), **Edge-Adaptive Smoothing**, and **4× Supersampling**. AA can be disabled or adjusted within a narrow strength range, independently of blur and glass strength. The two heavier methods remain experimental.

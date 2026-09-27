@@ -62,13 +62,18 @@ class MainActivity:ComponentActivity(){
     var fadeGradualness by remember{mutableFloatStateOf(FadeSettings.gradualness(prefs.getFloat("fade_gradualness",FadeSettings.DEFAULT_GRADUALNESS)))}
     var fullResolution by remember{mutableStateOf(prefs.getBoolean("full_resolution_glass",false))}
     var antialias by remember{mutableStateOf(prefs.getBoolean("antialias_enabled",true))}
+    var earlyStretch by remember{mutableFloatStateOf(prefs.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .9f})}
+    var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f})}
+    var enhancedEnd by remember{mutableStateOf(prefs.getBoolean("enhanced_end_stretch",true))}
+    var startupEasing by remember{mutableStateOf(prefs.getBoolean("startup_easing",true))}
+    var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",true))}
     var antialiasMode by remember{mutableIntStateOf(RenderQuality.aaMode(prefs.getInt("antialias_method_v2",0)))}
     var antialiasStrength by remember{mutableFloatStateOf(RenderQuality.antialias(prefs.getFloat("antialias_strength",.35f)))}
     var contentFps by remember{mutableIntStateOf(RenderQuality.fps(prefs.getInt("content_fps",120)))}
     var blurStrength by remember{mutableFloatStateOf(RenderQuality.blur(prefs.getFloat("blur_strength",.3f)))}
     var frostedReflection by remember{mutableStateOf(prefs.getBoolean("frosted_reflection",true))}
     var seamOffset by remember{mutableFloatStateOf(RenderQuality.seam(prefs.getFloat("seam_offset",.07f)))}
-    var intensity by remember{mutableFloatStateOf(prefs.getFloat("intensity",.5f))}
+    var intensity by remember{mutableFloatStateOf(prefs.getFloat("intensity",1f))}
     var closedThreshold by remember{mutableFloatStateOf(FoldThreshold.sanitizeClosed(prefs.getFloat("closed_threshold",2f)))}
     var threshold by remember{mutableFloatStateOf(FoldThreshold.sanitize(prefs.getFloat("open_threshold",172f)))}
     var status by remember{mutableStateOf("Connecting…")}
@@ -136,7 +141,7 @@ class MainActivity:ComponentActivity(){
        TextButton(onClick={blurStrength=.3f;prefs.edit().putFloat("blur_strength",.3f).apply();restart()}){Text("Reset blur amount")}
        Text("Glass strength · ${(intensity*100).roundToInt()}%")
        Slider(value=intensity,onValueChange={intensity=it},valueRange=.3f..1.5f,onValueChangeFinished={prefs.edit().putFloat("intensity",intensity).apply();restart()})
-       TextButton(onClick={intensity=.5f;prefs.edit().putFloat("intensity",.5f).apply();restart()}){Text("Reset glass strength")}
+       TextButton(onClick={intensity=1f;prefs.edit().putFloat("intensity",1f).apply();restart()}){Text("Reset glass strength")}
        Text("Black fade smoothing · ${fadeSmoothing.roundToInt()} ms")
        Slider(value=fadeSmoothing,onValueChange={fadeSmoothing=it},valueRange=0f..120f,onValueChangeFinished={prefs.edit().putFloat("fade_smoothing_ms",fadeSmoothing).apply()})
        Text("Softens changes in the fade as you move the hinge. Higher values add more smoothing.",style=MaterialTheme.typography.bodySmall)
@@ -169,6 +174,25 @@ class MainActivity:ComponentActivity(){
       SettingsCard("Advanced","Display thresholds, fold behavior, and diagnostics."){
        TextButton(onClick={advanced=!advanced}){Text(if(advanced)"Hide advanced settings" else "Show advanced settings")}
        if(advanced){
+        Text("Screen placement",style=MaterialTheme.typography.titleMedium)
+        for((v2,label) in listOf(false to "Original",true to "V2 Window Reveal · experimental"))TextButton(onClick={windowReveal=v2;prefs.edit().putBoolean("window_reveal_v2",v2).apply();restart()}){Text((if(windowReveal==v2)"✓ " else "")+label)}
+        Text("V2 starts cover stretching continuously from the beginning, without the early reversal. Original top/bottom perspective, folding motion and later projection remain intact. Applies to every animation style in both directions.",style=MaterialTheme.typography.bodySmall)
+
+        if(windowReveal){
+         Toggle("Startup easing",startupEasing){startupEasing=it;booleanSetting("startup_easing",it)}
+         Text("Softens the first opening frames. Turn off to compare the original startup timing.",style=MaterialTheme.typography.bodySmall)
+         Text("Early stretch · ${(earlyStretch*100).roundToInt()}%")
+         Slider(value=earlyStretch,onValueChange={earlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat("early_stretch",earlyStretch*3f).apply();restart()})
+         Text("Higher values add more stretch near the start. Final stretch and top/bottom perspective stay the same. Default: 90%. New 100% equals the previous 300%; existing selections keep their animation.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={earlyStretch=.9f;prefs.edit().putFloat("early_stretch",2.7f).apply();restart()}){Text("Reset early stretch")}
+         Toggle("Enhanced end stretch",enhancedEnd){enhancedEnd=it;booleanSetting("enhanced_end_stretch",it)}
+         if(enhancedEnd){
+          Text("End stretch · ${(endStretch*100).roundToInt()}%")
+          Slider(value=endStretch,onValueChange={endStretch=it},valueRange=.8f..1.5f,onValueChangeFinished={prefs.edit().putFloat("end_stretch",endStretch).apply();restart()})
+          Text("80% matches the previous ending. Default: 125%; up to 150% adds more end stretch without changing the handoff angle.",style=MaterialTheme.typography.bodySmall)
+          TextButton(onClick={endStretch=1.25f;prefs.edit().putFloat("end_stretch",1.25f).apply();restart()}){Text("Reset end stretch")}
+         }
+        }
         Toggle("Anti-aliasing",antialias){antialias=it;booleanSetting("antialias_enabled",it)}
         if(antialias){
          for((id,label) in listOf(0 to "Lightweight Texture Filtering",1 to "Edge-Adaptive Smoothing · experimental",2 to "4× Supersampling · experimental"))TextButton(onClick={antialiasMode=id;prefs.edit().putInt("antialias_method_v2",id).apply();restart()}){Text((if(antialiasMode==id)"✓ " else "")+label)}
