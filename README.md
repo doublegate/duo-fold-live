@@ -2,7 +2,7 @@
 
 # Duo Fold Live · 3.5.1
 
-**Current official release: 3.5.1.** Occasional unlock wallpaper flashing and Keep Awake remain known issues. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
+**Current official release: 3.5.1.** Occasional unlock wallpaper flashing remains a known issue. For Keep Awake, disable Samsung’s “Lock when folded”; see troubleshooting. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
 
 ## 📺 Step-by-step installation tutorial
 **New here? [Watch the full setup walkthrough on YouTube](https://www.youtube.com/watch?v=8Ucm7ceBDN4).**
@@ -63,7 +63,7 @@ The app guides setup. Samsung’s interactive wallpaper and Shizuku running in A
 - **Works over One UI and ordinary apps** without replacing your launcher.
 - **Temporary orientation locking during transitions**, followed by release, plus an Advanced **Repair auto-rotate** button for recovery.
 - **Guided setup and connection recovery:** wallpaper checks, Shizuku authorization, accessibility guidance, and reconnect controls are built in.
-- **Keep Awake support** is enabled and checked in the background, but remains unreliable on some folding transitions; see Known bugs.
+- **Keep Awake support** is enabled and checked in the background. Disable Samsung’s **Lock when folded** setting to keep the cover awake when closing from Home; see troubleshooting.
 
 ### Experiments and useful diagnostics
 
@@ -83,8 +83,7 @@ Installs that previously skipped onboarding without verifying wallpaper setup re
 
 1. **Black screen when switching between folded and unfolded displays.** This is a Samsung-side hardware limitation, not an issue with the app. We’re working on workarounds; for now, Duo uses a black fade transition to smooth the handoff in both directions.
 2. Unlocking directly onto Home may briefly reveal the underlying live wallpaper before the custom photo. The latest release improves this, but occasional flashes remain.
-3. **Keep Awake is unreliable when closing the phone, including from Home.** The setting can read as enabled even when the phone sleeps. Further investigation is deferred.
-4. Occasionally part of the unfolding fade does not trigger correctly, so the transition may look choppy.
+3. Occasionally part of the unfolding fade does not trigger correctly, so the transition may look choppy.
 
 ## Work in progress
 
@@ -97,6 +96,15 @@ Installs that previously skipped onboarding without verifying wallpaper setup re
 These are active areas of development, not promised release dates.
 
 ## Troubleshooting and reports
+
+**Phone locks when you fold it, despite Keep Awake?**
+
+1. Open **Samsung Settings** and search for **Lock when folded**.
+2. Turn **Lock when folded OFF**.
+3. Return to **Home**, then fold the phone to test.
+
+This Samsung setting can override Keep Awake. The project owner confirmed that disabling it resolved closing-from-Home sleep on their device. If it still happens, check Shizuku below and include a status report.
+
 
 Use **Trouble with Shizuku/Fold shutting off?** beneath the animation options first. Check that Shizuku is running and authorized and Duo’s accessibility service is enabled.
 
