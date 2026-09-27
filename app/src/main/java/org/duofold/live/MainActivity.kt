@@ -62,7 +62,9 @@ class MainActivity:ComponentActivity(){
     var fadeGradualness by remember{mutableFloatStateOf(FadeSettings.gradualness(prefs.getFloat("fade_gradualness",FadeSettings.DEFAULT_GRADUALNESS)))}
     var fullResolution by remember{mutableStateOf(prefs.getBoolean("full_resolution_glass",false))}
     var antialias by remember{mutableStateOf(prefs.getBoolean("antialias_enabled",true))}
-    var earlyStretch by remember{mutableFloatStateOf(prefs.getFloat("early_stretch",1.5f).let{if(it.isFinite())it.coerceIn(0f,3f) else 1.5f})}
+    var earlyStretch by remember{mutableFloatStateOf(prefs.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .9f})}
+    var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1f).let{if(it.isFinite())it.coerceIn(.8f,1f) else 1f})}
+    var enhancedEnd by remember{mutableStateOf(prefs.getBoolean("enhanced_end_stretch",true))}
     var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",false))}
     var antialiasMode by remember{mutableIntStateOf(RenderQuality.aaMode(prefs.getInt("antialias_method_v2",0)))}
     var antialiasStrength by remember{mutableFloatStateOf(RenderQuality.antialias(prefs.getFloat("antialias_strength",.35f)))}
@@ -177,9 +179,16 @@ class MainActivity:ComponentActivity(){
 
         if(windowReveal){
          Text("Early stretch · ${(earlyStretch*100).roundToInt()}%")
-         Slider(value=earlyStretch,onValueChange={earlyStretch=it},valueRange=0f..3f,onValueChangeFinished={prefs.edit().putFloat("early_stretch",earlyStretch).apply();restart()})
-         Text("Higher values add more stretch near the start. Final stretch and top/bottom perspective stay the same. Default: 150%; up to 300% for more early stretch.",style=MaterialTheme.typography.bodySmall)
-         TextButton(onClick={earlyStretch=1.5f;prefs.edit().putFloat("early_stretch",1.5f).apply();restart()}){Text("Reset early stretch")}
+         Slider(value=earlyStretch,onValueChange={earlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat("early_stretch",earlyStretch*3f).apply();restart()})
+         Text("Higher values add more stretch near the start. Final stretch and top/bottom perspective stay the same. Default: 90%. New 100% equals the previous 300%; existing selections keep their animation.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={earlyStretch=.9f;prefs.edit().putFloat("early_stretch",2.7f).apply();restart()}){Text("Reset early stretch")}
+         Toggle("Enhanced end stretch",enhancedEnd){enhancedEnd=it;booleanSetting("enhanced_end_stretch",it)}
+         if(enhancedEnd){
+          Text("End stretch · ${(endStretch*100).roundToInt()}%")
+          Slider(value=endStretch,onValueChange={endStretch=it},valueRange=.8f..1f,onValueChangeFinished={prefs.edit().putFloat("end_stretch",endStretch).apply();restart()})
+          Text("80% matches the previous ending. 100% adds 25% horizontal magnification late in the cover animation, without changing the handoff angle.",style=MaterialTheme.typography.bodySmall)
+          TextButton(onClick={endStretch=1f;prefs.edit().putFloat("end_stretch",1f).apply();restart()}){Text("Reset end stretch")}
+         }
         }
         Toggle("Anti-aliasing",antialias){antialias=it;booleanSetting("antialias_enabled",it)}
         if(antialias){
