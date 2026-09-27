@@ -45,6 +45,7 @@ internal object DuoGlassShader {
  uniform float windowReveal;
  uniform float earlyStretch;
  uniform float endStretch;
+ uniform float startupEasing;
  float coverAt(float x,float t){
   float a=3.141592654-t,c=cos(a),sn=sin(a);
   float hx=-0.23396,hz=-0.550084,px=hx-x*7.73936;
@@ -108,7 +109,7 @@ internal object DuoGlassShader {
   // horizontal mapping passes through exactly.
   if(windowReveal>0.5){
    float limited=inner>0.5 ? max(mapped,axis) : earlyCover(axis,3.141592654-a,mapped);
-   if(inner<0.5)limited/=mix(1.0,clamp(endStretch,0.8,1.0)/0.8,smoothstep(0.523598776,1.047197551,3.141592654-a));
+   if(inner<0.5)limited/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,3.141592654-a));
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }
@@ -119,7 +120,7 @@ internal object DuoGlassShader {
   }
   // Cover startup: reach opacity before separating the captured image from
   // the live image below it. Smooth geometry only within the first few degrees.
-  if(windowReveal>0.5 && inner<0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
+  if(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
   sourceUV=sourceUV*sampleScale+sampleOffset;
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
@@ -147,7 +148,7 @@ internal object DuoGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,(windowReveal>0.5 && inner<0.5)?0.015:0.035,progress);
+  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }
@@ -239,7 +240,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    dirty=false
    if(!preview && targetAngle.isFinite() && LiveAngles.fresh()){
     val dt=if(lastFrameNanos==0L)8.33f else ((now-lastFrameNanos)/1_000_000f).coerceIn(1f,50f)
-    if(!renderedAngle.isFinite() && !inner && targetAngle<=12f && context.getSharedPreferences("standalone",0).getBoolean("window_reveal_v2",false))renderedAngle=0f
+    if(!renderedAngle.isFinite() && !inner && targetAngle<=12f && context.getSharedPreferences("standalone",0).getBoolean("window_reveal_v2",true) && context.getSharedPreferences("standalone",0).getBoolean("startup_easing",true))renderedAngle=0f
     renderedAngle=FrameSmoothing.step(renderedAngle,targetAngle,dt,smoothingMs)
     hingeAngle=renderedAngle
     amount=if(inner && targetAngle>=FoldThreshold.sanitize(openThreshold))0f
@@ -330,8 +331,9 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
      shader.setFloatUniform("earlyStretch",quality.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else 2.7f})
-     shader.setFloatUniform("endStretch",if(quality.getBoolean("enhanced_end_stretch",true))quality.getFloat("end_stretch",1f).let{if(it.isFinite())it.coerceIn(.8f,1f) else 1f} else .8f)
-     shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",false))1f else 0f)
+     shader.setFloatUniform("endStretch",if(quality.getBoolean("enhanced_end_stretch",true))quality.getFloat("end_stretch",1f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1f} else .8f)
+     shader.setFloatUniform("startupEasing",if(quality.getBoolean("startup_easing",true))1f else 0f)
+     shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
      shader.setFloatUniform("texSize",f.bitmap.width.toFloat(),f.bitmap.height.toFloat())

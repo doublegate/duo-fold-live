@@ -63,9 +63,10 @@ class MainActivity:ComponentActivity(){
     var fullResolution by remember{mutableStateOf(prefs.getBoolean("full_resolution_glass",false))}
     var antialias by remember{mutableStateOf(prefs.getBoolean("antialias_enabled",true))}
     var earlyStretch by remember{mutableFloatStateOf(prefs.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .9f})}
-    var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1f).let{if(it.isFinite())it.coerceIn(.8f,1f) else 1f})}
+    var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1f})}
     var enhancedEnd by remember{mutableStateOf(prefs.getBoolean("enhanced_end_stretch",true))}
-    var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",false))}
+    var startupEasing by remember{mutableStateOf(prefs.getBoolean("startup_easing",true))}
+    var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",true))}
     var antialiasMode by remember{mutableIntStateOf(RenderQuality.aaMode(prefs.getInt("antialias_method_v2",0)))}
     var antialiasStrength by remember{mutableFloatStateOf(RenderQuality.antialias(prefs.getFloat("antialias_strength",.35f)))}
     var contentFps by remember{mutableIntStateOf(RenderQuality.fps(prefs.getInt("content_fps",120)))}
@@ -178,6 +179,8 @@ class MainActivity:ComponentActivity(){
         Text("V2 starts cover stretching continuously from the beginning, without the early reversal. Original top/bottom perspective, folding motion and later projection remain intact. Applies to every animation style in both directions.",style=MaterialTheme.typography.bodySmall)
 
         if(windowReveal){
+         Toggle("Startup easing",startupEasing){startupEasing=it;booleanSetting("startup_easing",it)}
+         Text("Softens the first opening frames. Turn off to compare the original startup timing.",style=MaterialTheme.typography.bodySmall)
          Text("Early stretch · ${(earlyStretch*100).roundToInt()}%")
          Slider(value=earlyStretch,onValueChange={earlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat("early_stretch",earlyStretch*3f).apply();restart()})
          Text("Higher values add more stretch near the start. Final stretch and top/bottom perspective stay the same. Default: 90%. New 100% equals the previous 300%; existing selections keep their animation.",style=MaterialTheme.typography.bodySmall)
@@ -185,8 +188,8 @@ class MainActivity:ComponentActivity(){
          Toggle("Enhanced end stretch",enhancedEnd){enhancedEnd=it;booleanSetting("enhanced_end_stretch",it)}
          if(enhancedEnd){
           Text("End stretch · ${(endStretch*100).roundToInt()}%")
-          Slider(value=endStretch,onValueChange={endStretch=it},valueRange=.8f..1f,onValueChangeFinished={prefs.edit().putFloat("end_stretch",endStretch).apply();restart()})
-          Text("80% matches the previous ending. 100% adds 25% horizontal magnification late in the cover animation, without changing the handoff angle.",style=MaterialTheme.typography.bodySmall)
+          Slider(value=endStretch,onValueChange={endStretch=it},valueRange=.8f..1.5f,onValueChangeFinished={prefs.edit().putFloat("end_stretch",endStretch).apply();restart()})
+          Text("80% matches the previous ending. 100% retains the current default look; up to 150% adds more end stretch without changing the handoff angle.",style=MaterialTheme.typography.bodySmall)
           TextButton(onClick={endStretch=1f;prefs.edit().putFloat("end_stretch",1f).apply();restart()}){Text("Reset end stretch")}
          }
         }
