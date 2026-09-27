@@ -39,8 +39,8 @@ internal object ClassicGlassShader {
   if(t>=joinAngle)return original;
   float end=coverAt(x,joinAngle),distance=max(0.0,x-end);
   float endSlope=-(coverAt(x,joinAngle+0.0001)-coverAt(x,joinAngle-0.0001))/0.0002*joinAngle;
-  // Slider preserves the original 0–100% scale and extrapolates to 150%.
-  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,1.5));
+  // Slider preserves the original 0–100% scale and extrapolates to 300%.
+  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,3.0));
   float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
   float stretch=(u3-2.0*u2+u)*startSlope+(-2.0*u3+3.0*u2)*distance+(u3-u2)*endSlope;
   return x-stretch;
