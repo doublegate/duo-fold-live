@@ -30,6 +30,22 @@ internal object ClassicGlassShader {
  uniform float seamOffset;
  uniform float reflectedCover;
  uniform float windowReveal;
+ uniform float earlyStretch;
+ float coverAt(float x,float t){
+  return x*cos(t)*40.0/max(1.0,40.0-x*15.7987*sin(t));
+ }
+ float earlyCover(float x,float t,float original){
+  float joinAngle=1.5;
+  if(t>=joinAngle)return original;
+  float end=coverAt(x,joinAngle),distance=max(0.0,x-end);
+  float endSlope=-(coverAt(x,joinAngle+0.0001)-coverAt(x,joinAngle-0.0001))/0.0002*joinAngle;
+  // Nonnegative Bezier control steps guarantee no horizontal reversal.
+  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,1.0));
+  float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
+  float stretch=(u3-2.0*u2+u)*startSlope+(-2.0*u3+3.0*u2)*distance+(u3-u2)*endSlope;
+  return x-stretch;
+ }
+
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -48,10 +64,10 @@ internal object ClassicGlassShader {
   float corrected=mix(projected,1.0-projected,reverse);
   float2 sourceUV=uv;
   if(horizontal>0.5) sourceUV.y=corrected; else sourceUV.x=corrected;
-  // Reflect early cover overshoot outward; keep the existing inner correction.
-  // All original coordinates pass through after the initial compression.
+  // Advance cover stretch continuously; keep the existing inner correction.
+  // Original coordinates pass through beyond the early-curve join.
   if(windowReveal>0.5){
-   float limited=inner<0.5 ? projected-2.0*max(projected-axis,0.0) : (axis<hinge ? max(projected,axis) : min(projected,axis));
+   float limited=inner<0.5 ? earlyCover(axis,a,projected) : (axis<hinge ? max(projected,axis) : min(projected,axis));
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }

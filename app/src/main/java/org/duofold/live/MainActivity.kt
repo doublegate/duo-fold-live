@@ -62,6 +62,7 @@ class MainActivity:ComponentActivity(){
     var fadeGradualness by remember{mutableFloatStateOf(FadeSettings.gradualness(prefs.getFloat("fade_gradualness",FadeSettings.DEFAULT_GRADUALNESS)))}
     var fullResolution by remember{mutableStateOf(prefs.getBoolean("full_resolution_glass",false))}
     var antialias by remember{mutableStateOf(prefs.getBoolean("antialias_enabled",true))}
+    var earlyStretch by remember{mutableFloatStateOf(prefs.getFloat("early_stretch",.5f).let{if(it.isFinite())it.coerceIn(0f,1f) else .5f})}
     var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",false))}
     var antialiasMode by remember{mutableIntStateOf(RenderQuality.aaMode(prefs.getInt("antialias_method_v2",0)))}
     var antialiasStrength by remember{mutableFloatStateOf(RenderQuality.antialias(prefs.getFloat("antialias_strength",.35f)))}
@@ -172,8 +173,14 @@ class MainActivity:ComponentActivity(){
        if(advanced){
         Text("Screen placement",style=MaterialTheme.typography.titleMedium)
         for((v2,label) in listOf(false to "Original",true to "V2 Window Reveal · experimental"))TextButton(onClick={windowReveal=v2;prefs.edit().putBoolean("window_reveal_v2",v2).apply();restart()}){Text((if(windowReveal==v2)"✓ " else "")+label)}
-        Text("V2 reverses the initial cover squeeze into an outward stretch. Original top/bottom perspective, folding motion and later projection remain intact. Applies to every animation style in both directions.",style=MaterialTheme.typography.bodySmall)
+        Text("V2 starts cover stretching continuously from the beginning, without the early reversal. Original top/bottom perspective, folding motion and later projection remain intact. Applies to every animation style in both directions.",style=MaterialTheme.typography.bodySmall)
 
+        if(windowReveal){
+         Text("Early stretch · ${(earlyStretch*100).roundToInt()}%")
+         Slider(value=earlyStretch,onValueChange={earlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat("early_stretch",earlyStretch).apply();restart()})
+         Text("Higher values add more stretch near the start. Final stretch and top/bottom perspective stay the same. Default: 50%.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={earlyStretch=.5f;prefs.edit().putFloat("early_stretch",.5f).apply();restart()}){Text("Reset early stretch")}
+        }
         Toggle("Anti-aliasing",antialias){antialias=it;booleanSetting("antialias_enabled",it)}
         if(antialias){
          for((id,label) in listOf(0 to "Lightweight Texture Filtering",1 to "Edge-Adaptive Smoothing · experimental",2 to "4× Supersampling · experimental"))TextButton(onClick={antialiasMode=id;prefs.edit().putInt("antialias_method_v2",id).apply();restart()}){Text((if(antialiasMode==id)"✓ " else "")+label)}

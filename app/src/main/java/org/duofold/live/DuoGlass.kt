@@ -43,6 +43,26 @@ internal object DuoGlassShader {
  uniform float seamOffset;
  uniform float reflectedCover;
  uniform float windowReveal;
+ uniform float earlyStretch;
+ float coverAt(float x,float t){
+  float a=3.141592654-t,c=cos(a),sn=sin(a);
+  float hx=-0.23396,hz=-0.550084,px=hx-x*7.73936;
+  float anchor=(c*hx+sn*hz)*(-39.75052)/(-sn*hx+c*hz+0.275454-40.0);
+  float point=(c*px+sn*hz)*(-39.75052)/(-sn*px+c*hz+0.275454-40.0);
+  return (point-anchor)/(7.73936*39.75052/39.174462);
+ }
+ float earlyCover(float x,float t,float original){
+  float joinAngle=1.047197551;
+  if(t>=joinAngle)return original;
+  float end=coverAt(x,joinAngle),distance=max(0.0,x-end);
+  float endSlope=-(coverAt(x,joinAngle+0.0001)-coverAt(x,joinAngle-0.0001))/0.0002*joinAngle;
+  // Nonnegative Bezier control steps guarantee no horizontal reversal.
+  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,1.0));
+  float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
+  float stretch=(u3-2.0*u2+u)*startSlope+(-2.0*u3+3.0*u2)*distance+(u3-u2)*endSlope;
+  return x-stretch;
+ }
+
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -82,11 +102,11 @@ internal object DuoGlassShader {
   float corrected=mix(mapped,1.0-mapped,reverse);
   float projectedAcross=1.0-(projectedY-(0.34562-5.8974))/11.1035;
   float2 sourceUV=horizontal>0.5 ? float2(projectedAcross,corrected) : float2(corrected,projectedAcross);
-  // V2 reflects early cover overshoot outward. Keep original projectedAcross,
-  // edge shading and perspective; once sampling is within the flat footprint,
-  // the original mapping passes through exactly (no angle/timing remap).
+  // V2 smoothly advances cover stretch. Keep original projectedAcross,
+  // edge shading and perspective. Beyond the early-curve join, the original
+  // horizontal mapping passes through exactly.
   if(windowReveal>0.5){
-   float limited=inner>0.5 ? max(mapped,axis) : mapped-2.0*max(mapped-axis,0.0);
+   float limited=inner>0.5 ? max(mapped,axis) : earlyCover(axis,3.141592654-a,mapped);
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }
@@ -303,6 +323,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
+     shader.setFloatUniform("earlyStretch",quality.getFloat("early_stretch",.5f).let{if(it.isFinite())it.coerceIn(0f,1f) else .5f})
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",false))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
