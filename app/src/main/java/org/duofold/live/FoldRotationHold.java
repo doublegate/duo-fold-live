@@ -24,20 +24,26 @@ final class FoldRotationHold {
  private String mapping="";
  private int heldRotation;
  private final int user;
- FoldRotationHold(int user){this.user=user;thread.start();handler=new Handler(thread.getLooper());handler.post(tick);}
+ private final String apk;
+ private RotationRecoveryProcess recovery;
+ private final java.util.concurrent.CountDownLatch released=new java.util.concurrent.CountDownLatch(1);
+ FoldRotationHold(int user,String apk){this.user=user;this.apk=apk;thread.start();handler=new Handler(thread.getLooper());handler.post(tick);}
  void update(boolean enabled,boolean fresh,float angle,float open){this.enabled=enabled;this.fresh=fresh;this.angle=angle;this.open=open;heartbeat=SystemClock.elapsedRealtime();}
  void close(){closed=true;handler.post(tick);}
+ void awaitRelease(){try{released.await(8,TimeUnit.SECONDS);}catch(InterruptedException e){Thread.currentThread().interrupt();}}
  private final Runnable tick=new Runnable(){public void run(){
   handler.removeCallbacks(this);
   long identity=Binder.clearCallingIdentity();
   try {
    long now=SystemClock.elapsedRealtime();
    if(now<retryAfter){handler.postDelayed(this,Math.max(32,retryAfter-now));return;}
-   if(backend==null)backend=new Backend(user);
+   if(backend==null){backend=new Backend(user);recovery=RotationRecoveryProcess.start(apk,user);}
+   if(recovery!=null&&!recovery.alive())throw new IOException("Rotation recovery helper exited; releasing hold");
    boolean wanted=!restorationPending&&policy.update(now,!closed&&enabled,fresh&&now-heartbeat<1000,angle,open);
    if(!active){backend.recover();restorationPending=false;if(wanted){
     Object info=backend.display();if(info==null)throw new IllegalStateException("Primary display unavailable");
     heldRotation=info.getClass().getField("rotation").getInt(info);
+    if(recovery==null)recovery=RotationRecoveryProcess.start(apk,user);
     backend.begin();active=true;backend.hold(heldRotation);mapping="";lastApply=0;
    }}
    if(active&&wanted){
@@ -55,10 +61,12 @@ final class FoldRotationHold {
     status=(verified?"Rotation hold verified":"Rotation hold requested; awaiting readback")+" · "+(heldRotation*90)+" degrees";
    } else if(active){backend.restore();active=false;restorationPending=false;status="Rotation release verified on both saved panels";}
   } catch(Exception error){restorationPending=true;retryAfter=SystemClock.elapsedRealtime()+2000;status="Rotation hold: "+root(error);enabled=false;
-   try{if(backend!=null)backend.restore();active=false;restorationPending=false;}catch(Exception restore){status="Rotation restoration pending: "+root(restore);}
+   try{if(backend!=null)backend.restore();active=false;restorationPending=false;if(recovery!=null&&!recovery.alive()){recovery.close();recovery=null;}}catch(Exception restore){status="Rotation restoration pending: "+root(restore);}
   } finally {Binder.restoreCallingIdentity(identity);}
-  if(!closed||active||restorationPending)handler.postDelayed(this,32);else {if(backend!=null)backend.close();thread.quitSafely();}
+  if(!closed||active||restorationPending)handler.postDelayed(this,32);else {if(backend!=null)backend.close();if(recovery!=null)recovery.close();released.countDown();thread.quitSafely();}
  }};
+ static void checkRecoveryBackend(int user)throws Exception{try(Backend ignored=new Backend(user)){} }
+ static boolean recoverAfterOwnerExit(int user)throws Exception{try(Backend b=new Backend(user)){b.recover();return !b.journal.exists();}}
  private static String root(Throwable e){while(e instanceof java.lang.reflect.InvocationTargetException&&e.getCause()!=null)e=e.getCause();return e.getClass().getSimpleName()+": "+e.getMessage();}
  /** Called by the independent keep-awake service. A live owner prevents recovery via the file lock. */
  private static final java.util.concurrent.atomic.AtomicBoolean recovering=new java.util.concurrent.atomic.AtomicBoolean();
