@@ -66,8 +66,8 @@ class MainActivity:ComponentActivity(){
     var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f})}
     var enhancedEnd by remember{mutableStateOf(prefs.getBoolean("enhanced_end_stretch",true))}
     var startupEasing by remember{mutableStateOf(prefs.getBoolean("startup_easing",true))}
-    var innerEarlyStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .9f})}
-    var innerEndStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f})}
+    var innerEarlyStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_early_stretch",0f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else 0f})}
+    var innerEndStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.2f,1.5f) else 1.25f})}
     var innerEnhancedEnd by remember{mutableStateOf(prefs.getBoolean("inner_enhanced_end_stretch",true))}
     var innerStartupEasing by remember{mutableStateOf(prefs.getBoolean("inner_startup_easing",true))}
     var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",true))}
@@ -202,13 +202,13 @@ class MainActivity:ComponentActivity(){
          Text("Softens entry into and exit from the actual inner-screen animation near fully open.",style=MaterialTheme.typography.bodySmall)
          Text("Early stretch · ${(innerEarlyStretch*100).roundToInt()}%")
          Slider(value=innerEarlyStretch,onValueChange={innerEarlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat("inner_early_stretch",innerEarlyStretch*3f).apply();restart()})
-         Text("Controls early stretch on actual inner content. Same 0–100% scale as the cover; default 90%. Independent of the cover and reflected preview.",style=MaterialTheme.typography.bodySmall)
-         TextButton(onClick={innerEarlyStretch=.9f;prefs.edit().putFloat("inner_early_stretch",2.7f).apply();restart()}){Text("Reset early stretch")}
+         Text("Controls early stretch on actual inner content. Same 0–100% scale as the cover; default 0%. Independent of the cover and reflected preview.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={innerEarlyStretch=0f;prefs.edit().putFloat("inner_early_stretch",0f).apply();restart()}){Text("Reset early stretch")}
          Toggle("Enhanced end stretch",innerEnhancedEnd){innerEnhancedEnd=it;booleanSetting("inner_enhanced_end_stretch",it)}
          if(innerEnhancedEnd){
           Text("End stretch · ${(innerEndStretch*100).roundToInt()}%")
-          Slider(value=innerEndStretch,onValueChange={innerEndStretch=it},valueRange=.8f..1.5f,onValueChangeFinished={prefs.edit().putFloat("inner_end_stretch",innerEndStretch).apply();restart()})
-          Text("Default: 125%; range 80–150%, using the same scale as the cover. Does not change the handoff angle.",style=MaterialTheme.typography.bodySmall)
+          Slider(value=innerEndStretch,onValueChange={innerEndStretch=it},valueRange=.2f..1.5f,onValueChangeFinished={prefs.edit().putFloat("inner_end_stretch",innerEndStretch).apply();restart()})
+          Text("Default: 125%; range 20–150%, preserving the existing scale. Does not change the handoff angle.",style=MaterialTheme.typography.bodySmall)
           TextButton(onClick={innerEndStretch=1.25f;prefs.edit().putFloat("inner_end_stretch",1.25f).apply();restart()}){Text("Reset end stretch")}
          }
         }

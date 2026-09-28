@@ -134,7 +134,7 @@ internal object DuoGlassShader {
     if(axis<innerHinge){
      float x=(innerHinge-axis)/innerHinge;
      float distance=earlyInner(x,a,innerAt(x,a,innerHinge),innerHinge);
-     distance/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,a));
+     distance/=mix(1.0,clamp(endStretch,0.2,1.5)/0.8,smoothstep(0.523598776,1.047197551,a));
      limited=innerHinge-innerHinge*distance;
     }else limited=axis;
    }
@@ -372,8 +372,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
-     shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else 2.7f})
-     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f} else .8f)
+     shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",if(inner)0f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(inner)0f else 2.7f})
+     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(if(inner).2f else .8f,1.5f) else 1.25f} else .8f)
      shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(inner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
