@@ -65,6 +65,8 @@ class MainActivity:ComponentActivity(){
     var earlyStretch by remember{mutableFloatStateOf(prefs.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .9f})}
     var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f})}
     var enhancedEnd by remember{mutableStateOf(prefs.getBoolean("enhanced_end_stretch",true))}
+    var coverVertical by remember{mutableFloatStateOf(prefs.getFloat("cover_vertical_compression",1f).let{if(it.isFinite())it.coerceIn(0f,2f) else 1f})}
+    var innerVertical by remember{mutableFloatStateOf(prefs.getFloat("inner_vertical_compression",1f).let{if(it.isFinite())it.coerceIn(0f,2f) else 1f})}
     var startupEasing by remember{mutableStateOf(prefs.getBoolean("startup_easing",true))}
     var innerEarlyStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_early_stretch",.9f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .3f})}
     var innerEndStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_end_stretch",.35f).let{if(it.isFinite())it.coerceIn(0f,1.5f) else .35f})}
@@ -186,6 +188,11 @@ class MainActivity:ComponentActivity(){
          OutlinedCard(modifier=Modifier.fillMaxWidth()){
           Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
          Text("Cover display animation",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.primary)
+         Text("Vertical compression · ${(coverVertical*100).roundToInt()}%")
+         Slider(value=coverVertical,onValueChange={coverVertical=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("cover_vertical_compression",coverVertical).apply();restart()})
+         Text("100% preserves the current top/bottom perspective. 0% removes vertical compression; 200% doubles it. Classic glass has no vertical compression to scale.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={coverVertical=1f;prefs.edit().putFloat("cover_vertical_compression",1f).apply();restart()}){Text("Reset vertical compression")}
+
          Toggle("Startup easing",startupEasing){startupEasing=it;booleanSetting("startup_easing",it)}
          Text("Softens the first opening frames. Turn off to compare the original startup timing.",style=MaterialTheme.typography.bodySmall)
          Text("Early stretch · ${(earlyStretch*100).roundToInt()}%")
@@ -205,6 +212,11 @@ class MainActivity:ComponentActivity(){
          OutlinedCard(modifier=Modifier.fillMaxWidth()){
           Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
          Text("Inner display animation",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.primary)
+         Text("Vertical compression · ${(innerVertical*100).roundToInt()}%")
+         Slider(value=innerVertical,onValueChange={innerVertical=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("inner_vertical_compression",innerVertical).apply();restart()})
+         Text("100% preserves the current top/bottom perspective. 0% removes vertical compression; 200% doubles it. Classic glass has no vertical compression to scale.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={innerVertical=1f;prefs.edit().putFloat("inner_vertical_compression",1f).apply();restart()}){Text("Reset vertical compression")}
+
          Toggle("Startup easing",innerStartupEasing){innerStartupEasing=it;booleanSetting("inner_startup_easing",it)}
          Text("Softens entry into and exit from the actual inner-screen animation near fully open.",style=MaterialTheme.typography.bodySmall)
          Text("Early stretch · ${(innerEarlyStretch*100).roundToInt()}%")

@@ -46,6 +46,7 @@ internal object DuoGlassShader {
  uniform float earlyStretch;
  uniform float endStretch;
  uniform float startupEasing;
+ uniform float verticalCompression;
  float coverAt(float x,float t){
   float a=3.141592654-t,c=cos(a),sn=sin(a);
   float hx=-0.23396,hz=-0.550084,px=hx-x*7.73936;
@@ -152,6 +153,12 @@ internal object DuoGlassShader {
   // Cover startup: reach opacity before separating the captured image from
   // the live image below it. Smooth geometry only within the first few degrees.
   if(windowReveal>0.5 && startupEasing>0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
+  // Preserve the exact original projection at the default, including rotation.
+  if(verticalCompression!=1.0){
+   float amount=clamp(verticalCompression,0.0,2.0);
+   if(horizontal>0.5)sourceUV.x=uv.x+(sourceUV.x-uv.x)*amount;
+   else sourceUV.y=uv.y+(sourceUV.y-uv.y)*amount;
+  }
   sourceUV=sourceUV*sampleScale+sampleOffset;
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
@@ -377,6 +384,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
      shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",if(inner).9f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(inner).9f else 2.7f})
      shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",if(inner).35f else 1.25f).let{if(it.isFinite())it.coerceIn(if(inner)0f else .8f,1.5f) else if(inner).35f else 1.25f} else .8f)
+     if(!classic)shader.setFloatUniform("verticalCompression",quality.getFloat(if(inner)"inner_vertical_compression" else "cover_vertical_compression",1f).let{if(it.isFinite())it.coerceIn(0f,2f) else 1f})
      shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(inner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
