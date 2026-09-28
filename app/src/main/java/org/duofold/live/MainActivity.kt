@@ -66,6 +66,10 @@ class MainActivity:ComponentActivity(){
     var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f})}
     var enhancedEnd by remember{mutableStateOf(prefs.getBoolean("enhanced_end_stretch",true))}
     var startupEasing by remember{mutableStateOf(prefs.getBoolean("startup_easing",true))}
+    var innerEarlyStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .9f})}
+    var innerEndStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f})}
+    var innerEnhancedEnd by remember{mutableStateOf(prefs.getBoolean("inner_enhanced_end_stretch",true))}
+    var innerStartupEasing by remember{mutableStateOf(prefs.getBoolean("inner_startup_easing",true))}
     var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",true))}
     var antialiasMode by remember{mutableIntStateOf(RenderQuality.aaMode(prefs.getInt("antialias_method_v2",0)))}
     var antialiasStrength by remember{mutableFloatStateOf(RenderQuality.antialias(prefs.getFloat("antialias_strength",.35f)))}
@@ -179,6 +183,7 @@ class MainActivity:ComponentActivity(){
         Text("V2 starts cover stretching continuously from the beginning, without the early reversal. Original top/bottom perspective, folding motion and later projection remain intact. Applies to every animation style in both directions.",style=MaterialTheme.typography.bodySmall)
 
         if(windowReveal){
+         Text("Cover display animation",style=MaterialTheme.typography.titleMedium)
          Toggle("Startup easing",startupEasing){startupEasing=it;booleanSetting("startup_easing",it)}
          Text("Softens the first opening frames. Turn off to compare the original startup timing.",style=MaterialTheme.typography.bodySmall)
          Text("Early stretch · ${(earlyStretch*100).roundToInt()}%")
@@ -191,6 +196,20 @@ class MainActivity:ComponentActivity(){
           Slider(value=endStretch,onValueChange={endStretch=it},valueRange=.8f..1.5f,onValueChangeFinished={prefs.edit().putFloat("end_stretch",endStretch).apply();restart()})
           Text("80% matches the previous ending. Default: 125%; up to 150% adds more end stretch without changing the handoff angle.",style=MaterialTheme.typography.bodySmall)
           TextButton(onClick={endStretch=1.25f;prefs.edit().putFloat("end_stretch",1.25f).apply();restart()}){Text("Reset end stretch")}
+         }
+         Text("Inner display animation",style=MaterialTheme.typography.titleMedium)
+         Toggle("Startup easing",innerStartupEasing){innerStartupEasing=it;booleanSetting("inner_startup_easing",it)}
+         Text("Softens entry into and exit from the actual inner-screen animation near fully open.",style=MaterialTheme.typography.bodySmall)
+         Text("Early stretch · ${(innerEarlyStretch*100).roundToInt()}%")
+         Slider(value=innerEarlyStretch,onValueChange={innerEarlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat("inner_early_stretch",innerEarlyStretch*3f).apply();restart()})
+         Text("Controls early stretch on actual inner content. Same 0–100% scale as the cover; default 90%. Independent of the cover and reflected preview.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={innerEarlyStretch=.9f;prefs.edit().putFloat("inner_early_stretch",2.7f).apply();restart()}){Text("Reset early stretch")}
+         Toggle("Enhanced end stretch",innerEnhancedEnd){innerEnhancedEnd=it;booleanSetting("inner_enhanced_end_stretch",it)}
+         if(innerEnhancedEnd){
+          Text("End stretch · ${(innerEndStretch*100).roundToInt()}%")
+          Slider(value=innerEndStretch,onValueChange={innerEndStretch=it},valueRange=.8f..1.5f,onValueChangeFinished={prefs.edit().putFloat("inner_end_stretch",innerEndStretch).apply();restart()})
+          Text("Default: 125%; range 80–150%, using the same scale as the cover. Does not change the handoff angle.",style=MaterialTheme.typography.bodySmall)
+          TextButton(onClick={innerEndStretch=1.25f;prefs.edit().putFloat("inner_end_stretch",1.25f).apply();restart()}){Text("Reset end stretch")}
          }
         }
         Toggle("Anti-aliasing",antialias){antialias=it;booleanSetting("antialias_enabled",it)}

@@ -65,6 +65,25 @@ internal object DuoGlassShader {
   return x-stretch;
  }
 
+ float innerAt(float x,float t,float span){
+  float c=cos(t),sn=sin(t),z=-0.025974;
+  float anchor=sn*z*(-39.75052)/(c*z+0.275454-40.0);
+  float px=-x*7.89935;
+  float point=(c*px+sn*z)*(-39.75052)/(-sn*px+c*z+0.275454-40.0);
+  return (anchor-point)/7.89935;
+ }
+ float earlyInner(float x,float t,float original,float span){
+  float joinAngle=1.047197551;
+  if(t>=joinAngle)return original;
+  float end=innerAt(x,joinAngle,span),distance=max(0.0,x-end);
+  float endSlope=-(innerAt(x,joinAngle+0.0001,span)-innerAt(x,joinAngle-0.0001,span))/0.0002*joinAngle;
+  // Slider preserves the original 0–100% scale and extrapolates to 300%.
+  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,3.0));
+  float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
+  float stretch=(u3-2.0*u2+u)*startSlope+(-2.0*u3+3.0*u2)*distance+(u3-u2)*endSlope;
+  return x-stretch;
+ }
+
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -110,6 +129,15 @@ internal object DuoGlassShader {
   if(windowReveal>0.5){
    float limited=inner>0.5 ? max(mapped,axis) : earlyCover(axis,3.141592654-a,mapped);
    if(inner<0.5)limited/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,3.141592654-a));
+   if(inner>0.5){
+    float innerHinge=fallback>0.5 ? 1.0 : 0.5;
+    if(axis<innerHinge){
+     float x=(innerHinge-axis)/innerHinge;
+     float distance=earlyInner(x,a,innerAt(x,a,innerHinge),innerHinge);
+     distance/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,a));
+     limited=innerHinge-innerHinge*distance;
+    }else limited=axis;
+   }
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }
@@ -120,7 +148,7 @@ internal object DuoGlassShader {
   }
   // Cover startup: reach opacity before separating the captured image from
   // the live image below it. Smooth geometry only within the first few degrees.
-  if(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
+  if(windowReveal>0.5 && startupEasing>0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
   sourceUV=sourceUV*sampleScale+sampleOffset;
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
@@ -148,7 +176,7 @@ internal object DuoGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)?0.015:0.035,progress);
+  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }
@@ -344,9 +372,9 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
-     shader.setFloatUniform("earlyStretch",quality.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else 2.7f})
-     shader.setFloatUniform("endStretch",if(quality.getBoolean("enhanced_end_stretch",true))quality.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f} else .8f)
-     shader.setFloatUniform("startupEasing",if(quality.getBoolean("startup_easing",true))1f else 0f)
+     shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else 2.7f})
+     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f} else .8f)
+     shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(inner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
