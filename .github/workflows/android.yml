@@ -65,7 +65,9 @@ jobs:
           done < "$RUNNER_TEMP/broken-assets.tsv"
 
       - name: Test and build unsigned release
-        run: ./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease
+        run: |
+          python3 tools/check_inner_stretch.py
+          ./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease
 
       - name: Sign and verify APK
         env:

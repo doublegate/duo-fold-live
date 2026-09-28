@@ -89,7 +89,10 @@ internal object ClassicGlassShader {
     if(axis<innerHinge){
      float x=(innerHinge-axis)/innerHinge;
      float distance=earlyInner(x,a,innerAt(x,a,innerHinge),innerHinge);
-     distance/=mix(1.0,clamp(endStretch,0.2,1.5)/0.8,smoothstep(0.523598776,1.047197551,a));
+     // Low settings reduce the displacement from flat; they must never
+     // divide the source distance by <1 and introduce inward compression.
+     if(endStretch<0.8)distance=mix(x,clamp(distance,0.0,x),clamp(endStretch/0.8,0.0,1.0));
+     else distance/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,a));
      limited=innerHinge-innerHinge*distance;
     }else limited=axis;
    }
