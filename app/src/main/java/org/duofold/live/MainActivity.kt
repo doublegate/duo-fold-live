@@ -65,7 +65,13 @@ class MainActivity:ComponentActivity(){
     var earlyStretch by remember{mutableFloatStateOf(prefs.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .9f})}
     var endStretch by remember{mutableFloatStateOf(prefs.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f})}
     var enhancedEnd by remember{mutableStateOf(prefs.getBoolean("enhanced_end_stretch",true))}
+    var coverVertical by remember{mutableFloatStateOf(prefs.getFloat("cover_vertical_compression",1.15f).let{if(it.isFinite())it.coerceIn(0f,2f) else 1.15f})}
+    var innerVertical by remember{mutableFloatStateOf(prefs.getFloat("inner_vertical_compression",.6f).let{if(it.isFinite())it.coerceIn(0f,2f) else .6f})}
     var startupEasing by remember{mutableStateOf(prefs.getBoolean("startup_easing",true))}
+    var innerEarlyStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_early_stretch",.9f).let{if(it.isFinite())it.coerceIn(0f,3f)/3f else .3f})}
+    var innerEndStretch by remember{mutableFloatStateOf(prefs.getFloat("inner_end_stretch",.45f).let{if(it.isFinite())it.coerceIn(0f,1.5f) else .45f})}
+    var innerEnhancedEnd by remember{mutableStateOf(prefs.getBoolean("inner_enhanced_end_stretch",true))}
+    var innerStartupEasing by remember{mutableStateOf(prefs.getBoolean("inner_startup_easing",true))}
     var windowReveal by remember{mutableStateOf(prefs.getBoolean("window_reveal_v2",true))}
     var antialiasMode by remember{mutableIntStateOf(RenderQuality.aaMode(prefs.getInt("antialias_method_v2",0)))}
     var antialiasStrength by remember{mutableFloatStateOf(RenderQuality.antialias(prefs.getFloat("antialias_strength",.35f)))}
@@ -179,6 +185,14 @@ class MainActivity:ComponentActivity(){
         Text("V2 starts cover stretching continuously from the beginning, without the early reversal. Original top/bottom perspective, folding motion and later projection remain intact. Applies to every animation style in both directions.",style=MaterialTheme.typography.bodySmall)
 
         if(windowReveal){
+         OutlinedCard(modifier=Modifier.fillMaxWidth()){
+          Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+         Text("Cover display animation",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.primary)
+         Text("Vertical compression · ${(coverVertical*100).roundToInt()}%")
+         Slider(value=coverVertical,onValueChange={coverVertical=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("cover_vertical_compression",coverVertical).apply();restart()})
+         Text("100% preserves the current top/bottom perspective. 0% removes vertical compression; 200% doubles it. Classic glass has no vertical compression to scale.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={coverVertical=1.15f;prefs.edit().putFloat("cover_vertical_compression",1.15f).apply();restart()}){Text("Reset vertical compression")}
+
          Toggle("Startup easing",startupEasing){startupEasing=it;booleanSetting("startup_easing",it)}
          Text("Softens the first opening frames. Turn off to compare the original startup timing.",style=MaterialTheme.typography.bodySmall)
          Text("Early stretch · ${(earlyStretch*100).roundToInt()}%")
@@ -191,6 +205,32 @@ class MainActivity:ComponentActivity(){
           Slider(value=endStretch,onValueChange={endStretch=it},valueRange=.8f..1.5f,onValueChangeFinished={prefs.edit().putFloat("end_stretch",endStretch).apply();restart()})
           Text("80% matches the previous ending. Default: 125%; up to 150% adds more end stretch without changing the handoff angle.",style=MaterialTheme.typography.bodySmall)
           TextButton(onClick={endStretch=1.25f;prefs.edit().putFloat("end_stretch",1.25f).apply();restart()}){Text("Reset end stretch")}
+         }
+          }
+         }
+         Spacer(Modifier.height(16.dp))
+         OutlinedCard(modifier=Modifier.fillMaxWidth()){
+          Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+         Text("Inner display animation",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.primary)
+         Text("Vertical compression · ${(innerVertical*100).roundToInt()}%")
+         Slider(value=innerVertical,onValueChange={innerVertical=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("inner_vertical_compression",innerVertical).apply();restart()})
+         Text("100% preserves the current top/bottom perspective. 0% removes vertical compression; 200% doubles it. Classic glass has no vertical compression to scale.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={innerVertical=.6f;prefs.edit().putFloat("inner_vertical_compression",.6f).apply();restart()}){Text("Reset vertical compression")}
+
+         Toggle("Startup easing",innerStartupEasing){innerStartupEasing=it;booleanSetting("inner_startup_easing",it)}
+         Text("Softens entry into and exit from the actual inner-screen animation near fully open.",style=MaterialTheme.typography.bodySmall)
+         Text("Early stretch · ${(innerEarlyStretch*100).roundToInt()}%")
+         Slider(value=innerEarlyStretch,onValueChange={innerEarlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat("inner_early_stretch",innerEarlyStretch*3f).apply();restart()})
+         Text("Controls early stretch on actual inner content. Same 0–100% scale as the cover; default 30%. Independent of the cover and reflected preview.",style=MaterialTheme.typography.bodySmall)
+         TextButton(onClick={innerEarlyStretch=.3f;prefs.edit().putFloat("inner_early_stretch",.9f).apply();restart()}){Text("Reset early stretch")}
+         Toggle("Enhanced end stretch",innerEnhancedEnd){innerEnhancedEnd=it;booleanSetting("inner_enhanced_end_stretch",it)}
+         if(innerEnhancedEnd){
+          Text("End stretch · ${(innerEndStretch*100).roundToInt()}%")
+          Slider(value=innerEndStretch,onValueChange={innerEndStretch=it},valueRange=0f..1.5f,onValueChangeFinished={prefs.edit().putFloat("inner_end_stretch",innerEndStretch).apply();restart()})
+          Text("Default: 45%; range 0–150%. Below 80% reduces horizontal stretch toward none at 0%, without inward squeezing. Values 80–150% retain their scale. Vertical perspective and handoff angle are unchanged.",style=MaterialTheme.typography.bodySmall)
+          TextButton(onClick={innerEndStretch=.45f;prefs.edit().putFloat("inner_end_stretch",.45f).apply();restart()}){Text("Reset end stretch")}
+         }
+          }
          }
         }
         Toggle("Anti-aliasing",antialias){antialias=it;booleanSetting("antialias_enabled",it)}
@@ -234,6 +274,7 @@ class MainActivity:ComponentActivity(){
         HorizontalDivider()
         Text("Keep cover awake on close",style=MaterialTheme.typography.titleMedium)
         Text("Always ON. Saved across updates and checked in the background, including when the animation is off. Reconnects automatically when authorized Shizuku becomes available.",style=MaterialTheme.typography.bodySmall)
+        Text("Phone still locks when folded? Open Samsung Settings, search for “Lock when folded”, and turn it OFF. Return to Home and fold again to test. This Samsung setting can override Keep Awake.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick={FoldAwakeDefault.reconnect();FoldAwakeDefault.tick(this@MainActivity);startBackground()}){Text("Recheck keep-awake now")}
         TextButton(onClick={developer=!developer}){Text("☰  Developer settings")}
         if(developer){

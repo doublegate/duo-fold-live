@@ -127,7 +127,7 @@ public final class LiveAngles {
  private void sendAngleCommand(View v){if(v!=null&&v.getWindowToken()!=null)WallpaperManager.getInstance(v.getContext()).sendWallpaperCommand(v.getWindowToken(),action,0,0,0,null);}
  private Bundle call(int code)throws Exception{
   IBinder b=reader;if(b==null)throw new IllegalStateException("Reader disconnected");
-  Parcel p=Parcel.obtain(),r=Parcel.obtain();try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);if(code==1)p.writeString(action);if(code==2)p.writeInt(StandaloneService.Companion.getInstance()!=null && context.getSharedPreferences("standalone",0).getBoolean("enabled",false) && context.getSystemService(PowerManager.class).isInteractive() && !context.getSystemService(android.app.KeyguardManager.class).isKeyguardLocked()?1:0);
+  Parcel p=Parcel.obtain(),r=Parcel.obtain();try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);if(code==1){p.writeString(action);p.writeString(context.getApplicationInfo().sourceDir);}if(code==2)p.writeInt(StandaloneService.Companion.getInstance()!=null && context.getSharedPreferences("standalone",0).getBoolean("enabled",false) && context.getSystemService(PowerManager.class).isInteractive() && !context.getSystemService(android.app.KeyguardManager.class).isKeyguardLocked()?1:0);
    if(code==2){
     p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("dual",false)?1:0);
     android.view.Display display=context.getSystemService(android.hardware.display.DisplayManager.class).getDisplay(0);

@@ -46,6 +46,7 @@ internal object DuoGlassShader {
  uniform float earlyStretch;
  uniform float endStretch;
  uniform float startupEasing;
+ uniform float verticalCompression;
  float coverAt(float x,float t){
   float a=3.141592654-t,c=cos(a),sn=sin(a);
   float hx=-0.23396,hz=-0.550084,px=hx-x*7.73936;
@@ -58,6 +59,25 @@ internal object DuoGlassShader {
   if(t>=joinAngle)return original;
   float end=coverAt(x,joinAngle),distance=max(0.0,x-end);
   float endSlope=-(coverAt(x,joinAngle+0.0001)-coverAt(x,joinAngle-0.0001))/0.0002*joinAngle;
+  // Slider preserves the original 0–100% scale and extrapolates to 300%.
+  float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,3.0));
+  float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
+  float stretch=(u3-2.0*u2+u)*startSlope+(-2.0*u3+3.0*u2)*distance+(u3-u2)*endSlope;
+  return x-stretch;
+ }
+
+ float innerAt(float x,float t,float span){
+  float c=cos(t),sn=sin(t),z=-0.025974;
+  float anchor=sn*z*(-39.75052)/(c*z+0.275454-40.0);
+  float px=-x*7.89935;
+  float point=(c*px+sn*z)*(-39.75052)/(-sn*px+c*z+0.275454-40.0);
+  return (anchor-point)/7.89935;
+ }
+ float earlyInner(float x,float t,float original,float span){
+  float joinAngle=1.047197551;
+  if(t>=joinAngle)return original;
+  float end=innerAt(x,joinAngle,span),distance=max(0.0,x-end);
+  float endSlope=-(innerAt(x,joinAngle+0.0001,span)-innerAt(x,joinAngle-0.0001,span))/0.0002*joinAngle;
   // Slider preserves the original 0–100% scale and extrapolates to 300%.
   float startSlope=max(0.0,3.0*distance-endSlope)*mix(0.05,0.9,clamp(earlyStretch,0.0,3.0));
   float u=clamp(t/joinAngle,0.0,1.0),u2=u*u,u3=u2*u;
@@ -110,6 +130,18 @@ internal object DuoGlassShader {
   if(windowReveal>0.5){
    float limited=inner>0.5 ? max(mapped,axis) : earlyCover(axis,3.141592654-a,mapped);
    if(inner<0.5)limited/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,3.141592654-a));
+   if(inner>0.5){
+    float innerHinge=fallback>0.5 ? 1.0 : 0.5;
+    if(axis<innerHinge){
+     float x=(innerHinge-axis)/innerHinge;
+     float distance=earlyInner(x,a,innerAt(x,a,innerHinge),innerHinge);
+     // Low settings reduce the displacement from flat; they must never
+     // divide the source distance by <1 and introduce inward compression.
+     if(endStretch<0.8)distance=mix(x,clamp(distance,0.0,x),clamp(endStretch/0.8,0.0,1.0));
+     else distance/=mix(1.0,clamp(endStretch,0.8,1.5)/0.8,smoothstep(0.523598776,1.047197551,a));
+     limited=innerHinge-innerHinge*distance;
+    }else limited=axis;
+   }
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }
@@ -120,7 +152,13 @@ internal object DuoGlassShader {
   }
   // Cover startup: reach opacity before separating the captured image from
   // the live image below it. Smooth geometry only within the first few degrees.
-  if(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
+  if(windowReveal>0.5 && startupEasing>0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
+  // Preserve the exact original projection at the default, including rotation.
+  if(verticalCompression!=1.0){
+   float amount=clamp(verticalCompression,0.0,2.0);
+   if(horizontal>0.5)sourceUV.x=uv.x+(sourceUV.x-uv.x)*amount;
+   else sourceUV.y=uv.y+(sourceUV.y-uv.y)*amount;
+  }
   sourceUV=sourceUV*sampleScale+sampleOffset;
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
@@ -148,7 +186,7 @@ internal object DuoGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5 && inner<0.5)?0.015:0.035,progress);
+  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }
@@ -167,6 +205,16 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var renderedAngle=Float.NaN
  private var lastFrameNanos=0L
  private var angleListening=false
+ private var paintedEffect=false
+ private var fallbackReason=""
+ private fun fallback(reason:String){if(reason!=fallbackReason){if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
+ private val clearGuard=object:Runnable{override fun run(){
+  if(!holder.surface.isValid)return
+  if(paintedEffect && (!LiveAngles.fresh() || !LiveAngles.effectAllowed || (!inner && targetAngle<=0f))){
+   amount=0f;renderedAngle=Float.NaN;requestDraw()
+  }
+  postDelayed(this,100)
+ }}
  private var openThreshold=172f
  private var smoothingMs=30f
  private var bufferWidth=0;private var bufferHeight=0
@@ -275,9 +323,10 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    if(!angleListening){angleListening=true;LiveAngles.add(angleListener)}
   }
   updateBufferSize();preferFastRefresh();requestDraw()
+  if(!preview){removeCallbacks(clearGuard);postDelayed(clearGuard,100)}
  }
  override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
- override fun surfaceDestroyed(h:SurfaceHolder){readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
+ override fun surfaceDestroyed(h:SurfaceHolder){removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
  private fun drawFrame(){
   if(!holder.surface.isValid || width<=0 || height<=0)return
   runCatching{
@@ -293,7 +342,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      frame?.let{cover->if(PreviewExpansionPolicy.fresh(cover.stamp,SystemClock.elapsedRealtime()))canvas.drawBitmap(cover.bitmap,null,RectF(0f,0f,width.toFloat(),height.toFloat()),basePaint)}
     }
     if(preview && frame!=null)canvas.drawBitmap(frame!!.bitmap,null,RectF(0f,0f,width.toFloat(),height.toFloat()),null)
-    if(amount<=.003f || (!preview && (!LiveAngles.fresh() || !LiveAngles.effectAllowed))){
+    if(amount<=.003f || (!preview && (!LiveAngles.fresh() || !LiveAngles.effectAllowed || (!inner && targetAngle<=0f)))){
+     paintedEffect=false;fallback("")
      endpoint=!preview && inner && LiveAngles.fresh() && LiveAngles.effectAllowed && targetAngle.isFinite() && targetAngle>=FoldThreshold.sanitize(openThreshold)
      if(endpoint){
       val current=Point();context.getSystemService(DisplayManager::class.java).getDisplay(0)?.getRealSize(current)
@@ -302,12 +352,14 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      }
      return@runCatching
     }
+    paintedEffect=true
     val f=frame
     val size=Point()
     if(!preview && !frozen)context.getSystemService(DisplayManager::class.java).getDisplay(0)?.getRealSize(size)
     val fresh=f!=null && (preview || frozen || (GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
     val shader=program
     if(fresh && shader!=null && f!=null){
+     fallback("")
      if(bitmap!==f.bitmap){
       bitmap=f.bitmap
       shader.setInputShader("content",BitmapShader(f.bitmap,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP).apply{setFilterMode(BitmapShader.FILTER_MODE_LINEAR)})
@@ -330,9 +382,10 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
-     shader.setFloatUniform("earlyStretch",quality.getFloat("early_stretch",2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else 2.7f})
-     shader.setFloatUniform("endStretch",if(quality.getBoolean("enhanced_end_stretch",true))quality.getFloat("end_stretch",1.25f).let{if(it.isFinite())it.coerceIn(.8f,1.5f) else 1.25f} else .8f)
-     shader.setFloatUniform("startupEasing",if(quality.getBoolean("startup_easing",true))1f else 0f)
+     shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",if(inner).9f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(inner).9f else 2.7f})
+     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",if(inner).45f else 1.25f).let{if(it.isFinite())it.coerceIn(if(inner)0f else .8f,1.5f) else if(inner).45f else 1.25f} else .8f)
+     if(!classic)shader.setFloatUniform("verticalCompression",quality.getFloat(if(inner)"inner_vertical_compression" else "cover_vertical_compression",if(inner).6f else 1.15f).let{if(it.isFinite())it.coerceIn(0f,2f) else if(inner).6f else 1.15f})
+     shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(inner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
@@ -351,6 +404,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      paint.shader=shader;drawGlass(canvas,aaMode,RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)))
      if(!preview && !frozen && f.width==size.x && f.height==size.y)rendered=f
     }else{
+     fallback(if(shader==null)"shader unavailable" else if(f==null)"capture missing" else "capture stale or wrong display size")
      // Honest, live black-fade fallback; never leave stale captured content visible.
      val horizontal=rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270
      val reversed=rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180
