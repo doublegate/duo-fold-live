@@ -160,6 +160,7 @@ final class FoldRotationHold {
     Method property=state.getClass().getMethod("hasProperty",int.class);
     // Samsung Android 17 PostureDeviceStateConverter: rear=16, outer-primary=11,
     // inner-primary=12, half-open=2. Match the system's own posture routing.
+    // Android 16 (SM-F966U1, One UI 8.5) DeviceState uses the same property values.
     int posture=(boolean)property.invoke(state,16)?3:(boolean)property.invoke(state,11)?0:(boolean)property.invoke(state,12)?((boolean)property.invoke(state,2)?1:2):-1;
     if(posture>=0)routes.put(Integer.toString(posture),state.getClass().getMethod("getIdentifier").invoke(state));
    }

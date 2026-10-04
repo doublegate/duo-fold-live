@@ -1,3 +1,9 @@
+## 3.5.2-a16.1 — Fold 7 Android 16 port (fork, untested on device)
+
+- Accept Android 16 (SDK 36) on the SM-F966 / Fold 7 family only. Android 17 stays eligible for every model, as before; SDK 35 and 38 remain rejected.
+- The Android 16 framework on SM-F966U1 (One UI 8.5) contains every hidden class the app reflects into, and its `DeviceState` posture property values match the Android 17 values the rotation hold uses. `IWindowManager.setShouldShowSystemDecors` is absent there and was already optional.
+- Upstream deliberately left Fold 7 on Android 16 outside the wallpaper profile (1.5.4); whether FoldInteractive answers angle commands on One UI 8.5 is not yet verified.
+
 ## 1.6.0 — Tested performance release
 
 Promotes 1.6.0-alpha.4 behavior unchanged. Only stable version metadata and release documentation differ.
