@@ -13,7 +13,7 @@ final class PreviewExpansion extends Binder {
  private final HandlerThread thread=new HandlerThread("duo-preview-expansion");
  private final Handler handler;
  private Object dm,wm;private java.lang.reflect.Method displayInfo,keyguard;
- private SurfaceControl layer,backdrop,seam;private Bitmap seamHardware;private HardwareBuffer seamBuffer;private int seamPixels;private Bitmap hardware,cleanHardware;private HardwareBuffer buffer,cleanBuffer;
+ private SurfaceControl layer,backdrop,seam,holdBlur;private java.lang.reflect.Method holdBlurRadius;private float holdRadius=56;private Bitmap seamHardware;private HardwareBuffer seamBuffer;private int seamPixels;private Bitmap hardware,cleanHardware;private HardwareBuffer buffer,cleanBuffer;
  private boolean frostedLeft,rightPreviewReady;
  private String innerId;private int bw,bh;
  private volatile boolean enabled=false;
@@ -102,6 +102,10 @@ final class PreviewExpansion extends Binder {
   Bitmap scaledLeft=Bitmap.createScaledBitmap(frosted?bitmap:clean,bitmap.getWidth(),bitmap.getHeight(),true);android.graphics.Matrix flip=new android.graphics.Matrix();flip.setScale(-1f,1f);Bitmap reflected=Bitmap.createBitmap(scaledLeft,0,0,scaledLeft.getWidth(),scaledLeft.getHeight(),flip,true);Bitmap next=reflected.copy(Bitmap.Config.HARDWARE,false);if(reflected!=clean&&reflected!=bitmap)reflected.recycle();if(scaledLeft!=clean&&scaledLeft!=bitmap&&scaledLeft!=reflected)scaledLeft.recycle();HardwareBuffer nextBuffer=next.getHardwareBuffer();
   Bitmap nextClean=Bitmap.createScaledBitmap(clean,bitmap.getWidth(),bitmap.getHeight(),true).copy(Bitmap.Config.HARDWARE,false);HardwareBuffer nextCleanBuffer=nextClean.getHardwareBuffer();
   if(layer==null)layer=new SurfaceControl.Builder().setName("Duo clean right hold").setBufferSize(bitmap.getWidth(),bitmap.getHeight()).setOpaque(true).setHidden(true).build();
+  if(holdBlur==null){try{SurfaceControl.Builder hb=new SurfaceControl.Builder().setName("Duo hold blur").setHidden(true);
+   SurfaceControl.Builder.class.getMethod("setEffectLayer").invoke(hb);holdBlur=hb.build();
+   holdBlurRadius=SurfaceControl.Transaction.class.getMethod("setBackgroundBlurRadius",SurfaceControl.class,int.class);}catch(Exception e){holdBlur=null;holdBlurRadius=null;}}
+  holdRadius=holdBlurProp();
   if(backdrop==null)backdrop=new SurfaceControl.Builder().setName("Duo reflected left handoff copy").setBufferSize(bitmap.getWidth(),bitmap.getHeight()).setOpaque(true).setHidden(true).build();
   try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
    SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,backdrop,true);
@@ -117,6 +121,10 @@ final class PreviewExpansion extends Binder {
   status="Reflected left hold prepared; clean right and unfold center blur ready";
   if(!polling){polling=true;handler.post(tick);}
  }
+ private static float holdBlurProp(){
+  try{String v=(String)Class.forName("android.os.SystemProperties").getMethod("get",String.class,String.class).invoke(null,"debug.duofold.preview_blur_max","");
+   return v==null||v.isEmpty()?56:Math.max(0,Math.min(PreviewBlurPolicy.MAX_RADIUS,Float.parseFloat(v)));}catch(Exception e){return 56;}
+ }
  private void prepareSeam(Bitmap blurred,Object target,float fraction)throws Exception{
   if(fraction<=0){if(seam!=null)try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(seam,false).apply();}seamPixels=0;return;}
   int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");float fit=Math.min(w/(float)bw,h/(float)bh);
@@ -127,7 +135,7 @@ final class PreviewExpansion extends Binder {
   if(seam==null)seam=new SurfaceControl.Builder().setName("Duo static center-edge blur").setBufferSize(strip,bh).setHidden(true).build();
   try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
    SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,seam,true);
-   t.setBuffer(seam,nextBuffer).setLayer(seam,Integer.MAX_VALUE-19).apply();
+   t.setBuffer(seam,nextBuffer).setLayer(seam,Integer.MAX_VALUE-18).apply();
   }
   if(seamBuffer!=null)seamBuffer.close();if(seamHardware!=null)seamHardware.recycle();seamHardware=next;seamBuffer=nextBuffer;seamPixels=strip;
  }
@@ -145,10 +153,11 @@ final class PreviewExpansion extends Binder {
    if(start==0 && (switched || coverOff)){
     if(!PreviewExpansionPolicy.fresh(stamp,now)){clear("Expansion skipped: stale prepared frame");return;}
     start=now;ready=pendingReady?0:-1;status="Holding the existing two-column layout during handoff";
+    if(BuildConfig.DEBUG)android.util.Log.i("DuoHold","hold start readyAlready="+pendingReady+" blur="+Math.round(holdRadius));
    }
    long elapsed=start==0?0:now-start;
    float alpha=start==0?1f:PreviewExpansionPolicy.opacity(elapsed,ready);
-   if(alpha<=0){completed=true;clear("Prepared layout handed to inner content");return;}
+   if(alpha<=0){if(BuildConfig.DEBUG)android.util.Log.i("DuoHold","hold end elapsed="+elapsed+" readyAt="+ready);completed=true;clear("Prepared layout handed to inner content");return;}
    int stack=number(target,"layerStack"),panelState=number(target,"state");
    if(stack!=lastStack || panelState!=lastPanelState){lastStack=stack;lastPanelState=panelState;event("Inner stack="+stack+" state="+panelState);}
    int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
@@ -163,6 +172,14 @@ final class PreviewExpansion extends Binder {
     // Android reports a transient OFF state during the physical panel remap.
     t.setPosition(backdrop,0,0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady)) && leftWidth>0);
     t.setPosition(layer,leftWidth,(h-bh*fit)/2f).setAlpha(layer,alpha).setVisibility(layer,start>0);
+    if(holdBlur!=null&&holdBlurRadius!=null){
+     // Same compositor blur as the live preview, so the frozen right frame continues its look.
+     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,holdBlur,stack);
+     float top=(h-bh*fit)/2f;
+     t.setLayer(holdBlur,Integer.MAX_VALUE-19).setCrop(holdBlur,new android.graphics.Rect(Math.round(leftWidth),Math.round(top),Math.round(leftWidth+bw*fit),Math.round(top+bh*fit)))
+      .setPosition(holdBlur,0,0).setAlpha(holdBlur,alpha).setVisibility(holdBlur,start>0);
+     holdBlurRadius.invoke(t,holdBlur,Math.round(holdRadius));
+    }
     if(seam!=null){
      SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,seam,stack);
      SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,seam,fit,0f,0f,fit);
@@ -186,6 +203,7 @@ final class PreviewExpansion extends Binder {
   if(layer!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(layer,false).reparent(layer,null).apply();}catch(Exception ignored){}layer.release();layer=null;}
   if(backdrop!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(backdrop,false).reparent(backdrop,null).apply();}catch(Exception ignored){}backdrop.release();backdrop=null;}
   if(seam!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(seam,false).reparent(seam,null).apply();}catch(Exception ignored){}seam.release();seam=null;}
+  if(holdBlur!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(holdBlur,false).reparent(holdBlur,null).apply();}catch(Exception ignored){}holdBlur.release();holdBlur=null;}
   if(seamBuffer!=null){seamBuffer.close();seamBuffer=null;}if(seamHardware!=null){seamHardware.recycle();seamHardware=null;}seamPixels=0;
   if(cleanBuffer!=null){cleanBuffer.close();cleanBuffer=null;}if(cleanHardware!=null){cleanHardware.recycle();cleanHardware=null;}
   if(buffer!=null){buffer.close();buffer=null;}if(hardware!=null){hardware.recycle();hardware=null;}status=message;

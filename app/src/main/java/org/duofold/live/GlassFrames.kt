@@ -25,8 +25,10 @@ internal object GlassFrames {
  fun acquire(){clients++;if(clients==1){resetMeasurement();generation++;main.post(tick)}}
  fun release(){clients=(clients-1).coerceAtLeast(0);if(clients==0){generation++;frame=null;main.removeCallbacks(tick)}}
  private var urgentUntil=0L
+ private var requestedAt=0L;private var loggedEmpty=-1
+ private fun dlog(m:String){if(BuildConfig.DEBUG)android.util.Log.i("DuoReady",m)}
  fun requestFreshCapture(){
-  generation++;frame=null;urgentUntil=SystemClock.elapsedRealtime()+900
+  generation++;frame=null;urgentUntil=SystemClock.elapsedRealtime()+900;requestedAt=SystemClock.elapsedRealtime();dlog("fresh capture requested")
   main.removeCallbacks(tick)
   if(clients>0 && !suspended)main.post(tick)
  }
@@ -35,7 +37,7 @@ internal object GlassFrames {
   if(clients==0 || suspended)return
   if(pending){main.postDelayed(this,retryDelay(50));return}
   val valid=surfaces.values.filter{it.isValid}.take(4)
-  if(valid.isEmpty()){frame=null;main.postDelayed(this,retryDelay(100));return}
+  if(valid.isEmpty()){if(loggedEmpty!=generation){loggedEmpty=generation;dlog("no valid surfaces +"+(SystemClock.elapsedRealtime()-requestedAt)+"ms")};frame=null;main.postDelayed(this,retryDelay(100));return}
   val started=SystemClock.elapsedRealtimeNanos();val gen=generation;val captureDisplay=if(LiveAngles.continuityNative)1 else 0;pending=true
   executor.execute{
    var result:Bundle?=null;var error="Glass frame unavailable"
@@ -48,6 +50,7 @@ internal object GlassFrames {
    val pyramid=if(response?.getBoolean("ok")==true&&capturedBitmap!=null)runCatching{levels(capturedBitmap)}.getOrDefault(emptyList()) else emptyList()
    main.post{pending=false;if(gen==generation && clients>0 && !suspended && captureDisplay==(if(LiveAngles.continuityNative)1 else 0)){
     val bitmap=capturedBitmap
+    if(SystemClock.elapsedRealtime()<urgentUntil)dlog("capture "+(if(response?.getBoolean("ok")==true)"ok" else "FAIL: $message")+" +"+(SystemClock.elapsedRealtime()-requestedAt)+"ms surfaces=${valid.size} display=$captureDisplay")
     if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · ${response.getString("backend") ?: "layer capture"}"}
     else{frame=null;status="Glass unavailable; debug-style fallback: $message"}
     main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(targetFps,SystemClock.elapsedRealtimeNanos()-started))

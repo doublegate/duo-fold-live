@@ -84,7 +84,7 @@ public class AngleReader extends Binder {
       String[] fields=line.trim().split("\\s+",2);long age;
       try{age=System.currentTimeMillis()-(long)(Double.parseDouble(fields[0])*1000);}catch(Exception ex){staleResponses++;continue;}
       if(age < -100||age>1500){staleResponses++;continue;}
-      angle=value;last=SystemClock.elapsedRealtime()-Math.max(0,age);count++;unique.add(value);min=Math.min(min,value);max=Math.max(max,value);raw=line;state="Receiving";
+      angle=value;mirror.blur(value);last=SystemClock.elapsedRealtime()-Math.max(0,age);count++;unique.add(value);min=Math.min(min,value);max=Math.max(max,value);raw=line;state="Receiving";
      }
     }}
     synchronized(this){if(gen==generation)state="Log reader ended";}

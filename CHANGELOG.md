@@ -1,3 +1,11 @@
+## 3.5.2-a16.3 — Progressive preview blur and blurred handoff hold (fork, checkpoint)
+
+- Opening, before the panel switch: the live cover preview on the inner panel (a full-resolution compositor mirror, previously always sharp) gets a SurfaceFlinger background-blur effect layer whose radius follows the hinge: smoothstep from 0 px at 0° to 56 px at the Fold 7 switch angle, matching the cover glass's `smoothstep(hinge/90°)` blur curve. Radius updates glide at 8 ms intervals (40 ms time constant) between angle samples, which arrive only every 30–130 ms in 2–3° steps.
+- After the switch: the frozen two-column "hold" layout gets the same blur over its right frame, so blur continues through the black-out instead of jumping to a sharp frozen frame.
+- Debug-tunable without rebuilding: `debug.duofold.preview_blur_start|max|smooth_ms` system properties (shell-writable).
+- Debug builds log blur (`DuoBlur`), hold timing (`DuoHold`) and the post-switch capture/readiness pipeline (`DuoReady`). Measured: the hold lasts 560–810 ms after an opening switch, dominated by the first capture on the new panel and glass readiness.
+- Known limit, motivating the next step: before the switch the inner panel is drawn by compositor layers (mirror, snapshot, blur), after it by the glass shader, so perspective "book" corners, blur shape and timing still change at the switch.
+
 ## 3.5.2-a16.2 — Fold 7 handoff black fade tuned to measured timing (fork)
 
 Measured on SM-F966U1 / One UI 8.5 with a debug fade trace (8–10 transitions per run), solid black per fold went from 280–490 ms closing / 483–622 ms opening to 155–179 ms / 140–212 ms. Most of what remains is Samsung's own panel OFF→ON blank (about 18–145 ms), which Android sequences on purpose.
