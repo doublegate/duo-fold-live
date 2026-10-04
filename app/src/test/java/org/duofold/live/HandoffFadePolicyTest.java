@@ -96,4 +96,72 @@ public class HandoffFadePolicyTest {
   assertEquals(0,p.opacity(1210,false,100,false,true,-1,false),0);
   assertEquals(0,p.opacity(1220,false,Float.NaN,true,true,-1,false),0);
  }
+
+ @Test public void fold7ReachesOpeningBlackAtMeasuredSwitchAngle(){
+  // SM-F966U1 / One UI 8.5 measured: inner->cover switch at 92-94 deg, cover->inner at 101-102 deg.
+  assertArrayEquals(new float[]{94,101},HandoffFadePolicy.blackAnglesFor("SM-F966U1"),0);
+  assertArrayEquals(new float[]{94,98},HandoffFadePolicy.blackAnglesFor("SM-F971U"),0);
+  assertArrayEquals(new float[]{94,98},HandoffFadePolicy.blackAnglesFor(null),0);
+  assertEquals(1,HandoffFadePolicy.approach(false,101,0,94,101),0);
+  assertTrue(HandoffFadePolicy.approach(false,98,0,94,101)<1);
+  assertEquals(0,HandoffFadePolicy.approach(false,91,0,94,101),0);
+  assertEquals(1,HandoffFadePolicy.approach(true,94,0,94,101),0);
+  HandoffFadePolicy p=new HandoffFadePolicy();p.blackAngles(94,101);p.settings(0,0);
+  assertTrue(p.opacity(0,false,98,true,true,-1,false)<1);
+  assertEquals(1,p.opacity(10,false,101,true,true,-1,false),0);
+ }
+ @Test public void defaultBlackAnglesMatchOriginalApproach(){
+  for(float a=80;a<=115;a+=.5f)for(float g:new float[]{0,.35f,1})for(boolean inner:new boolean[]{true,false})
+   assertEquals(HandoffFadePolicy.approach(inner,a,g),HandoffFadePolicy.approach(inner,a,g,94,98),0);
+ }
+ @Test public void invalidBlackAnglesFallBackToDefaults(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.blackAngles(Float.NaN,200);p.settings(0,0);
+  assertEquals(1,p.opacity(0,false,98,true,true,-1,false),0);
+ }
+
+ @Test public void fold7RevealsShortlyAfterPanelOnWithoutWaitingForDraw(){
+  assertEquals(40,HandoffFadePolicy.readyTimeoutFor("SM-F966U1"));
+  assertEquals(HandoffFadePolicy.READY_TIMEOUT_MS,HandoffFadePolicy.readyTimeoutFor("SM-F971U"));
+  assertEquals(100,HandoffFadePolicy.revealBaseFor("SM-F966U1"));
+  assertEquals(180,HandoffFadePolicy.revealBaseFor("SM-F971U"));
+  for(boolean destination:new boolean[]{true,false}){
+   HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.revealBase(100);p.settings(0,0);
+   float a=destination?101:94;
+   p.opacity(0,!destination,a,true,true,-1,!destination);
+   assertEquals(1,p.opacity(10,destination,a,true,false,-1,!destination),0);   // switched, panel OFF
+   assertEquals(1,p.opacity(50,destination,a,true,true,-1,!destination),0);    // ON at 50, no draw yet
+   assertEquals(1,p.opacity(85,destination,a,true,true,-1,!destination),0);    // 35 ms after ON: still black
+   assertEquals(1,p.opacity(90,destination,a,true,true,-1,!destination),0);    // 40 ms: reveal begins
+   assertEquals(.5f,p.opacity(140,destination,a,true,true,-1,!destination),.001); // halfway through 100 ms
+   assertEquals(0,p.opacity(195,destination,a,true,true,-1,!destination),0);   // done
+  }
+ }
+ @Test public void gradualnessStillWidensFold7Reveal(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.revealBase(100);
+  assertEquals(100,p.revealMs(0));assertEquals(420,p.revealMs(1));
+  HandoffFadePolicy d=new HandoffFadePolicy();
+  assertEquals(FadeSettings.reveal(0),d.revealMs(0));assertEquals(FadeSettings.reveal(1),d.revealMs(1));
+ }
+ @Test public void fold7ChecksEveryFrameOnlyWhileSwitching(){
+  assertEquals(16,HandoffFadePolicy.tickDelayMs(true,true));
+  assertEquals(80,HandoffFadePolicy.tickDelayMs(true,false));
+  assertEquals(80,HandoffFadePolicy.tickDelayMs(false,true));
+  assertEquals(80,HandoffFadePolicy.tickDelayMs(false,false));
+ }
+ @Test public void invalidRevealBaseFallsBackToDefault(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.revealBase(5);assertEquals(180,p.revealMs(0));
+  p.revealBase(10_000);assertEquals(180,p.revealMs(0));
+ }
+ @Test public void defaultReadyTimeoutUnchanged(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.settings(0,0);
+  p.opacity(0,false,98,true,true,-1,false);
+  p.opacity(10,true,98,true,true,-1,false);
+  assertEquals(1,p.opacity(500,true,98,true,true,-1,false),0);
+ }
+ @Test public void invalidReadyTimeoutFallsBackToDefault(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(-5);p.settings(0,0);
+  p.opacity(0,false,98,true,true,-1,false);
+  p.opacity(10,true,98,true,true,-1,false);
+  assertEquals(1,p.opacity(500,true,98,true,true,-1,false),0);
+ }
 }

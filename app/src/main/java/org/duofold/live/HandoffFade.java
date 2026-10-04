@@ -1,5 +1,6 @@
 package org.duofold.live;
 import android.os.*;
+import android.util.Log;
 import android.view.SurfaceControl;
 import android.view.Choreographer;
 import java.lang.reflect.Field;
@@ -29,6 +30,7 @@ final class HandoffFade {
  private final float[] alphas={-1,-1};
  private final int[] stacks={-1,-1},extents={-1,-1};
  private long statusAt;
+ private static final boolean FAST_SWITCH_TICKS=DeviceCompatibility.isFold7(Build.MODEL);
  private final Choreographer.FrameCallback frame=when->this.tick.run();
  void settings(float smoothing,float gradualness,boolean requireGlass,float open){this.smoothing=smoothing;this.gradualness=gradualness;requireInnerGlass=requireGlass;openThreshold=open;}
  private void schedule(){
@@ -36,14 +38,14 @@ final class HandoffFade {
   frames.postFrameCallback(frame);
   // Display VSYNC can stop during the physical OFF interval. Keep lease and
   // lock checks alive without running a competing high-frequency timer.
-  handler.postDelayed(tick,80);
+  handler.postDelayed(tick,HandoffFadePolicy.tickDelayMs(policy.transitioning(),FAST_SWITCH_TICKS));
  }
  private volatile long lease,lastFresh;
  private long lastPrimary;
  private Object dm,wm;private Method info,keyguard,stack,color,crop,colorLayer;
  private volatile boolean ticking;
  volatile String status="Handoff fade idle";
- HandoffFade(){thread.start();handler=new Handler(thread.getLooper());}
+ HandoffFade(){float[] black=HandoffFadePolicy.blackAnglesFor(Build.MODEL);policy.blackAngles(black[0],black[1]);policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));thread.start();handler=new Handler(thread.getLooper());}
  void update(boolean enabled,float angle,boolean fresh){
   long now=SystemClock.elapsedRealtime();if(fresh){this.angle=angle;lastFresh=now;}
   this.enabled=enabled;lease=now;if((!ticking||!enabled)&&wakePending.compareAndSet(false,true))handler.post(start);
@@ -94,6 +96,7 @@ final class HandoffFade {
    Object secondary=info.invoke(dm,1);
    boolean secondaryInner=secondary!=null&&Math.min(value(secondary,"logicalWidth"),value(secondary,"logicalHeight"))/(float)Math.max(value(secondary,"logicalWidth"),value(secondary,"logicalHeight"))>.7f;
    float mirrorAlpha=closingMirror.opacity(now,inner,secondaryInner&&value(secondary,"state")==2,mirrorSubmitted,gradualness);
+   if(BuildConfig.DEBUG)trace(now,inner,value(p,"state"),alpha,mirrorAlpha,secondary==null?-1:value(secondary,"state"));
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
     boolean changed=false;
     for(int i=0;i<2;i++){
@@ -114,10 +117,19 @@ final class HandoffFade {
     }
     if(changed)t.apply();
    }
-   if(now>=statusAt){statusAt=now+250;status="Handoff fade: "+Math.round(alpha*100)+"%; primary="+(inner?"inner":"cover")+"; "+(policy.transitioning()?"destination black/reveal":"angle fade")+"; "+policy.readiness+"; glass commit settle 2 ms; legacy ON settle 32 ms; reveal "+FadeSettings.reveal(gradualness)+" ms";}
+   if(now>=statusAt){statusAt=now+250;status="Handoff fade: "+Math.round(alpha*100)+"%; primary="+(inner?"inner":"cover")+"; "+(policy.transitioning()?"destination black/reveal":"angle fade")+"; "+policy.readiness+"; glass commit settle 2 ms; legacy ON settle 32 ms; reveal "+policy.revealMs(gradualness)+" ms";}
    schedule();
   }catch(Exception e){clear();status="Handoff fade unavailable: "+e.getClass().getSimpleName()+": "+e.getMessage();}
  }};
+ private String lastTrace="";
+ /** Debug builds only: one logcat line per change in fade decision, for timing against display events. */
+ private void trace(long now,boolean inner,int state,float alpha,float mirrorAlpha,int secondaryState){
+  String key=(inner?"inner":"cover")+" s="+state+" s2="+secondaryState+" a="+Math.round(alpha*20)*5+" m="+Math.round(mirrorAlpha*20)*5
+   +" "+(policy.transitioning()?"switch":"angle")+" "+policy.readiness;
+  if(key.equals(lastTrace))return;
+  lastTrace=key;
+  Log.i("DuoHandoff","t="+now+" angle="+angle+" age="+(now-lastFresh)+" "+key);
+ }
  private void clear(){
   handler.removeCallbacks(readinessTick);handler.removeCallbacks(tick);if(frames!=null)frames.removeFrameCallback(frame);
   java.util.Arrays.fill(alphas,-1);java.util.Arrays.fill(stacks,-1);java.util.Arrays.fill(extents,-1);ticking=false;policy.reset();closingMirror.reset();mirrorSubmitted=-1;

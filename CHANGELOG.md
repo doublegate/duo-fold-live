@@ -1,3 +1,13 @@
+## 3.5.2-a16.2 — Fold 7 handoff black fade tuned to measured timing (fork)
+
+Measured on SM-F966U1 / One UI 8.5 with a debug fade trace (8–10 transitions per run), solid black per fold went from 280–490 ms closing / 483–622 ms opening to 155–179 ms / 140–212 ms. Most of what remains is Samsung's own panel OFF→ON blank (about 18–145 ms), which Android sequences on purpose.
+
+- Fold 7 only: full black at 94° closing and 101° opening (Samsung's measured switch angles) instead of 98° opening; the re-arm midpoint follows the configured angles.
+- Fold 7 only: reveal 40 ms after the destination panel turns ON instead of waiting up to 900 ms for a confirmed destination draw. Duo draws only on new angles, and the wallpaper sends none for 0.3–0.5 s after a switch.
+- Fold 7 only: 100 ms reveal at 0% gradualness (was 180 ms), and per-frame (16 ms) re-checks while a switch is in progress (was 80 ms).
+- Every other model keeps the original values; the defaults are covered by an equivalence test.
+- Debug builds log each change in fade decision under the `DuoHandoff` tag.
+
 ## 3.5.2-a16.1 — Fold 7 Android 16 port (fork, untested on device)
 
 - Accept Android 16 (SDK 36) on the SM-F966 / Fold 7 family only. Android 17 stays eligible for every model, as before; SDK 35 and 38 remain rejected.
