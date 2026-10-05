@@ -50,7 +50,9 @@ internal object GlassFrames {
     val bitmap=capturedBitmap
     if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · ${response.getString("backend") ?: "layer capture"}"}
     else{frame=null;status="Glass unavailable; debug-style fallback: $message"}
-    main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(targetFps,SystemClock.elapsedRealtimeNanos()-started))
+    // Full rate while the hinge moves or right after a switch; RenderQuality.STILL_FPS once still. The shader redraws
+    // on every angle change regardless; only the captured content under the glass is refreshed less often.
+    main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(RenderQuality.adaptiveFps(targetFps,LiveAngles.sinceAngleChangeMs(),SystemClock.elapsedRealtime()<urgentUntil),SystemClock.elapsedRealtimeNanos()-started))
    }else if(clients>0 && !suspended)main.post(this)}
   }
  }}
@@ -65,7 +67,9 @@ internal object GlassFrames {
     p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(valid.size);valid.forEach{p.writeTypedObject(it,0)}
     LiveAngles.captureBinder().transact(3,p,r,0);r.readException();val result=r.readBundle(Bitmap::class.java.classLoader)
     val bitmap=result?.getParcelable("bitmap",Bitmap::class.java)
-    if(result?.getBoolean("ok")==true && bitmap!=null){captured=GlassFrame(bitmap,result.getInt("width"),result.getInt("height"),result.getLong("stamp"));note="capture ${SystemClock.elapsedRealtime()-captureStarted} ms; queue ${captureStarted-requestedAt} ms"}
+    // Build the mip pyramid here, off the main thread; DuoGlass otherwise builds it with seven createScaledBitmap
+    // calls on the main thread at the first frozen draw.
+    if(result?.getBoolean("ok")==true && bitmap!=null){captured=GlassFrame(bitmap,result.getInt("width"),result.getInt("height"),result.getLong("stamp"),runCatching{levels(bitmap)}.getOrDefault(emptyList()));note="capture ${SystemClock.elapsedRealtime()-captureStarted} ms; queue ${captureStarted-requestedAt} ms"}
     else note=result?.getString("error")?:note
    }catch(e:Exception){note=e.message?:note}finally{p.recycle();r.recycle()}
    val f=captured;val message=note;main.post{done(f,message)}
