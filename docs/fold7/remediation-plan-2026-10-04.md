@@ -21,7 +21,7 @@ Effective angle maps <= 2 deg to 0, which fires 9-103 ms before the base state r
 | A | 3.5.2-a16.8 | Done | A1-A8 implemented test-first; C3 (cached, rate-limited base-state query) landed with it. A3: the client still unbinds with `remove=true`; the service-side bounded teardown wait covers the destroy it triggers. |
 | B | 3.5.2-a16.9 | Done | B1-B10 and F1. B2 uses the pose blend (progress, motion, blur and darkening equal at the switch) rather than switching the strip to the inner leaf model, which needs a texture remap that cannot be validated off-device. B3 also aligns the post-switch hold. |
 | C | 3.5.2-a16.10 | Done | C1-C6 (C3 in a16.8). C5: mip pyramid moved off the main thread; per-frame SharedPreferences reads measured as negligible and left as is. C6: rate-limited to 50 ms instead of a separate thread (same effect on the poll, no new threading). D5 and D8 landed here. |
-| D | — | Planned | D5, D8 done in Phase C. |
+| D | 3.5.2-a16.11 | Done | D1-D4, D6, D7 (D5, D8 in a16.10). D1 via a generation ticket + `ReentrantLock.tryLock` revoke. D4 copies handles with the framework's (hidden) copy constructor, falling back to the originals if it is missing. D6 hands over after the old hold releases rather than reusing the instance. |
 | E | — | Planned | E1, E2, E6 done with the plan itself. |
 | F | — | Planned | F1 done in Phase B. |
 

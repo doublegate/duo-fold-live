@@ -43,4 +43,24 @@ final class RecordVisible {
  static SurfaceControl[] exclusions(){
   synchronized(layers){layers.removeIf(sc->sc==null||!sc.isValid());return layers.toArray(new SurfaceControl[0]);}
  }
+ private static java.lang.reflect.Constructor<SurfaceControl> copier;private static boolean copierResolved;
+ /**
+  * Plan D4: GlassCapture's own handles to the registered layers, copied under the lock, so an owner thread
+  * releasing its layer mid-capture cannot leave a released handle in the exclusion list. Copies are appended to
+  * {@code owned} for the caller to release. If the (hidden) copy constructor is unavailable, the originals are
+  * returned as before.
+  */
+ static SurfaceControl[] exclusionCopies(java.util.List<SurfaceControl> owned){
+  synchronized(layers){
+   layers.removeIf(sc->sc==null||!sc.isValid());
+   if(!copierResolved){copierResolved=true;try{copier=SurfaceControl.class.getConstructor(SurfaceControl.class,String.class);}catch(Exception e){copier=null;}}
+   SurfaceControl[] out=new SurfaceControl[layers.size()];
+   for(int i=0;i<out.length;i++){
+    SurfaceControl sc=layers.get(i);
+    try{if(copier!=null){out[i]=copier.newInstance(sc,"DuoGlassCaptureExclusion");owned.add(out[i]);continue;}}catch(Exception ignored){}
+    out[i]=sc;
+   }
+   return out;
+  }
+ }
 }

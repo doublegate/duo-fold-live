@@ -1,3 +1,28 @@
+## 3.5.2-a16.11 — Service-process races and stalls (fork, Phase D)
+
+Plan Phase D (D1-D4, D6, D7; D5 and D8 landed in a16.10). **All models.** Verified by unit tests only.
+
+- Live mirror attach (D1): an attach that read "preview allowed" just before a revoke or a reader stop could commit a
+  cover mirror that then stayed on the inner right half until the next start. Attaches now take a generation
+  ticket (`MirrorAttachGate`) before reading the permission and close what they built if it was revoked meanwhile.
+  `InnerLiveMirror` uses a lock instead of its monitor, so the angle poll's revoke uses `tryLock` and never waits out a
+  250 ms attach; reader stop invalidates any attach in flight.
+- Blur ticker (D3): the reset and restart run as one runnable on the ticker thread, so two frame loops can no longer
+  run at once (halving the glide time and doubling transactions) and the attach thread no longer writes
+  ticker-owned fields (which could leave the preview sharp while still).
+- Fold-setting commands (D2): the glass-capture helper's `settings` subprocess is bounded at 2 s and killed on
+  timeout, and the helper's close no longer queues behind an in-flight capture. A hung `settings` process used to
+  hold the helper's monitor forever, blocking reader teardown and with it every later angle poll.
+- Record-visible capture exclusions (D4): the capture takes its own copies of the registered layers under the lock
+  and releases them afterwards, so an owner releasing its layer mid-capture cannot leave a released handle in the
+  exclusion list (diagnostics mode only).
+- Rotation hold (D6): after a reader restart the new hold is created only once the previous one has restored
+  rotation and dropped its file lock; it used to fail with "Another orientation hold is active" and leave about 2 s
+  without a hold, so a fold right after a restart could rotate the screen.
+- Shizuku destroy (D7): the up-to-8 s wait for the rotation restore happens outside the reader's monitor, so a
+  poll in flight is not held for that long before the process exits.
+- Tests: `MirrorAttachGateTest`.
+
 ## 3.5.2-a16.10 — Idle costs nothing: hot paths off the poll and frame loops (fork, Phase C)
 
 Plan Phase C (C1-C6; C3 landed in a16.8) plus D5 and D8. **All models** unless noted. Verified by unit tests only.

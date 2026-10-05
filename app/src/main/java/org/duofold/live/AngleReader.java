@@ -7,7 +7,7 @@ public class AngleReader extends Binder {
  private GlassCapture capture;
  private PreviewExpansion expansion;
  private volatile HandoffFade fade;
- private FoldRotationHold rotation;
+ private FoldRotationHold rotation,retiringRotation;
  private String recoveryApk;
  private final AnimationModePolicy animationMode=new AnimationModePolicy();
  private volatile boolean previewAllowed=false;
@@ -23,19 +23,22 @@ public class AngleReader extends Binder {
  // Mirror attach waits up to 250 ms for its compositor commit. Run it outside this monitor so the 4 ms
  // angle poll (code 2), which drives the fade and the cover hold, never stalls behind it mid-transition.
  protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
+  // Shizuku destroy: wait for the rotation restore (up to 8 s) OUTSIDE the monitor (plan D7), so a code-2 poll
+  // in flight is not held for that long before the process exits.
+  if(code==16777115){FoldRotationHold pending;synchronized(this){pending=rotation!=null?rotation:retiringRotation;stop();}if(pending!=null)pending.awaitRelease();System.exit(0);return true;}
   if(code==4||code==5){
    data.enforceInterface(DESCRIPTOR);
    synchronized(this){int caller=Binder.getCallingUid();if(owner<0)owner=caller;if(caller!=owner)throw new SecurityException("Wrong caller");}
    if(code==5){mirror.detach(data.readInt());reply.writeNoException();return true;}
    int id=data.readInt();android.view.SurfaceControl parent=data.readTypedObject(android.view.SurfaceControl.CREATOR);int w=data.readInt(),h=data.readInt();boolean halfPane=data.dataAvail()>=4&&data.readInt()!=0;
-   Bundle result=mirror.attach(id,parent,w,h,previewAllowed,halfPane);HandoffFade f=fade;if(result.getBoolean("ok")&&f!=null)f.mirrorSubmitted();
+   int ticket=mirror.ticket();  // before reading previewAllowed (plan D1)
+   Bundle result=mirror.attach(id,parent,w,h,previewAllowed,halfPane,ticket);HandoffFade f=fade;if(result.getBoolean("ok")&&f!=null)f.mirrorSubmitted();
    reply.writeNoException();reply.writeBundle(result);return true;
   }
   synchronized(this){return locked(code,data,reply,flags);}
  }
  private boolean locked(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
   if(code==INTERFACE_TRANSACTION){reply.writeString(DESCRIPTOR);return true;}
-  if(code==16777115){FoldRotationHold pending=rotation;stop();if(pending!=null)pending.awaitRelease();System.exit(0);return true;}
   data.enforceInterface(DESCRIPTOR);
   int caller=Binder.getCallingUid();if(owner<0)owner=caller;if(caller!=owner)throw new SecurityException("Wrong caller");
   if(code==7){
@@ -65,8 +68,10 @@ public class AngleReader extends Binder {
    boolean effectAllowed=animationMode.update(mode,effectiveAngle,last>0&&heartbeat-last<750);
    boolean mirrorMode=AnimationModePolicy.mirrors(mode);
    appEnabled=appEnabled&&effectAllowed;
-   if(rotation==null)rotation=new FoldRotationHold(caller/100000,recoveryApk);
-   rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);
+   // Plan D6: a new hold only after the previous one restored rotation and dropped its file lock; creating it
+   // earlier failed with "Another orientation hold is active" and left ~2 s with no hold after a restart.
+   if(rotation==null&&(retiringRotation==null||retiringRotation.released())){retiringRotation=null;rotation=new FoldRotationHold(caller/100000,recoveryApk);}
+   if(rotation!=null)rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);
    if(fade==null)fade=new HandoffFade();
    fade.settings(fadeSmoothing,fadeGradualness,mirrorMode&&!debug,openThreshold);
    fade.update(live&&!dual&&appEnabled&&!handoff.probeHolding(),effectiveAngle,last>0&&heartbeat-last<750);
@@ -84,7 +89,7 @@ public class AngleReader extends Binder {
    Bundle b=new Bundle();b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putBoolean("effectAllowed",effectAllowed);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",expansion==null?"No bridge":expansion.trace);b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);b.putString("raw",raw);reply.writeNoException();reply.writeBundle(b);return true;}
   if(code==3){stop();reply.writeNoException();return true;}return super.onTransact(code,data,reply,flags);
  }
- private synchronized void stop(){previewAllowed=false;if(rotation!=null){rotation.close();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.close();mainGlass.close();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
+ private synchronized void stop(){previewAllowed=false;if(rotation!=null){rotation.close();retiringRotation=rotation;rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.shutdown();mainGlass.close();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
  private synchronized void start(String action){
   stop();int reaped=OrphanReaders.reap();if(reaped>0)android.util.Log.w("DuoReady","reaped "+reaped+" orphaned angle reader(s)");logLines=matchingResponses=staleResponses=0;count=0;unique.clear();angle=Float.NaN;min=180;max=0;last=0;raw="";state="Starting log reader";final int gen=generation;
   Thread reader=new Thread(()->{

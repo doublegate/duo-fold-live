@@ -5,7 +5,7 @@ import android.view.SurfaceControl;
 /** Live inner-to-cover compositor mirror; no bitmap capture, saved screenshots or protected-content overrides. */
 final class InnerLiveMirror {
  private volatile SurfaceControl mirror;private int owner;
- // Read lock-free from the angle reader thread: attach() holds the monitor while awaiting its commit.
+ // Read lock-free from the angle reader thread: attach() holds the lock while awaiting its commit.
  private volatile SurfaceControl blur;
  private volatile java.lang.reflect.Method blurRadius;
  private volatile float blurStart=0,blurEnd=101,blurMax=56,blurTau=40,lastBlur=-1;
@@ -26,6 +26,9 @@ final class InnerLiveMirror {
   tick.postDelayed(this,8);
  }};
  private final Runnable restart=()->{tickAt=SystemClock.uptimeMillis()-8;frame.run();};
+ // Plan D3: the whole reset runs on the ticker, so a frame mid-run cannot repost itself next to a new loop and
+ // no ticker-owned field is written from the attach thread.
+ private final Runnable resetAndStart=()->{tick.removeCallbacks(frame);tick.removeCallbacks(restart);shown=Float.NaN;lastBlur=-1;ticking=true;restart.run();};
  private void wake(){if(!ticking&&blur!=null){ticking=true;tick.post(restart);}}
  String status="Cover live mirror idle";
  /** Tuning (max/start/glide) comes from BlurTuning, shared with the hold and the right-half blur. */
@@ -43,10 +46,16 @@ final class InnerLiveMirror {
   IBinder b=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,name);
   return Class.forName(stub).getMethod("asInterface",IBinder.class).invoke(null,b);
  }
- synchronized Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed){return attach(id,parent,width,height,allowed,false);}
+ // Plan D1: a lock instead of the monitor so revoke() can tryLock and never wait out a 250 ms attach.
+ private final java.util.concurrent.locks.ReentrantLock lock=new java.util.concurrent.locks.ReentrantLock();
+ private final MirrorAttachGate gate=new MirrorAttachGate();
+ /** Take before reading "preview allowed" (AngleReader code 4). */
+ int ticket(){return gate.ticket();}
+ Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed){return attach(id,parent,width,height,allowed,false,gate.ticket());}
  /** halfPane (unified renderer, plan B3): fill exactly the right half so the pane boundary matches the post-switch glass. */
- synchronized Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed,boolean halfPane){
-  long identity=Binder.clearCallingIdentity();Bundle result=new Bundle();attaching.set(true);
+ Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed,boolean halfPane,int ticket){
+  lock.lock();
+  long identity=Binder.clearCallingIdentity();Bundle result=new Bundle();
   try{
    close();
    if(!allowed||parent==null||!parent.isValid())throw new IllegalStateException("Cover mirror not currently eligible");
@@ -64,7 +73,7 @@ final class InnerLiveMirror {
    if(Math.min(sw,sh)/(float)Math.max(sw,sh)>.7f || Math.min(dw,dh)/(float)Math.max(dw,dh)<=.7f)throw new IllegalStateException("Cover-to-inner preview only");
    float[] fit=halfPane?LiveMirrorLayout.rightHalf(sw,sh,width,height):LiveMirrorLayout.fit(sw,sh,width,height);
    blurStart=BlurTuning.start();blurMax=BlurTuning.max();
-   blurEnd=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1];lastBlur=-1;blurTau=BlurTuning.smoothMs();shown=Float.NaN;
+   blurEnd=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1];blurTau=BlurTuning.smoothMs();
    try{
     SurfaceControl.Builder b=new SurfaceControl.Builder().setName("Duo preview progressive blur");
     SurfaceControl.Builder.class.getMethod("setEffectLayer").invoke(b);
@@ -84,21 +93,29 @@ final class InnerLiveMirror {
     t.reparent(mirror,parent).setLayer(mirror,1).setCrop(mirror,new Rect(0,0,sw,sh)).setPosition(mirror,fit[1],fit[2]).setVisibility(mirror,true).apply();
    }
    if(!committed.await(250,java.util.concurrent.TimeUnit.MILLISECONDS))throw new IllegalStateException("Right preview commit not yet confirmed; retrying");
-   if(blur!=null){tick.removeCallbacks(frame);ticking=true;tick.post(restart);}
+   if(!gate.valid(ticket))throw new IllegalStateException("Preview revoked during attach");
+   if(blur!=null)tick.post(resetAndStart);
    if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoBlur","attach blur="+(blur!=null)+" setter="+(blurRadius!=null)+" max="+blurMax+" start="+blurStart+" end="+blurEnd+" tau="+blurTau);
    owner=id;status="Live cover → inner preview (right aligned; normal handoff)"+(blur!=null?"; progressive blur "+Math.round(blurMax)+" px from "+Math.round(blurStart)+"° to "+Math.round(blurEnd)+"°":"; progressive blur unavailable");result.putBoolean("ok",true);
   }catch(Exception e){close();Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();status="Cover mirror unavailable: "+cause.getClass().getSimpleName()+": "+cause.getMessage();}
-  finally{attaching.set(false);if(parent!=null)parent.release();Binder.restoreCallingIdentity(identity);}
+  finally{if(parent!=null)parent.release();Binder.restoreCallingIdentity(identity);lock.unlock();}
   result.putString("status",status);return result;
  }
- synchronized void detach(int id){if(owner==id)close();}
+ void detach(int id){lock.lock();try{if(owner==id)close();}finally{lock.unlock();}}
  boolean attached(){return mirror!=null;}
- private final java.util.concurrent.atomic.AtomicBoolean attaching=new java.util.concurrent.atomic.AtomicBoolean();
- /** From the angle poll: close unless an attach is in flight (the next poll, 4 ms later, closes it then). */
- void revoke(){if(attaching.get())return;if(mirror!=null||blur!=null)close();}
- synchronized void close(){
-  if(blur!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(blur,false).reparent(blur,null).apply();}catch(Exception ignored){}SurfaceControl old=blur;blur=null;lastBlur=-1;tick.post(old::release);}
-  if(mirror!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(mirror,false).reparent(mirror,null).apply();}catch(Exception ignored){}mirror.release();mirror=null;status="Cover live mirror released";}
-  owner=0;
+ /** From the angle poll: never blocks. An attach in flight sees the bumped generation and closes itself. */
+ void revoke(){
+  gate.revoke();
+  if(lock.tryLock()){try{if(mirror!=null||blur!=null)close();}finally{lock.unlock();}}
+ }
+ /** Reader stop: invalidate any attach in flight, then close (may wait for it; teardown only). */
+ void shutdown(){gate.revoke();lock.lock();try{close();}finally{lock.unlock();}}
+ void close(){
+  lock.lock();
+  try{
+   if(blur!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(blur,false).reparent(blur,null).apply();}catch(Exception ignored){}SurfaceControl old=blur;blur=null;tick.post(()->{lastBlur=-1;old.release();});}
+   if(mirror!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(mirror,false).reparent(mirror,null).apply();}catch(Exception ignored){}mirror.release();mirror=null;status="Cover live mirror released";}
+   owner=0;
+  }finally{lock.unlock();}
  }
 }

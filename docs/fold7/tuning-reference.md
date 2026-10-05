@@ -19,6 +19,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | 3.5.2-a16.8 | Phase A | Every override release gated (mode, teardown, dual, probe, cancel, direct inner). |
 | 3.5.2-a16.9 | Phase B | Right-half geometry, strip pose blend, shared blur curve and tuning, capture fidelity. |
 | 3.5.2-a16.10 | Phase C | Hot paths: band hold, keyguard caches, settled shade, cached display info, probe rate limit. |
+| 3.5.2-a16.11 | Phase D | Service races: mirror attach generation, ticker reset, bounded settings commands, exclusion copies, rotation hand-over, destroy wait. |
 
 ## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
 
