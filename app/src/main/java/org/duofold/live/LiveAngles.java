@@ -29,8 +29,8 @@ public final class LiveAngles {
  public interface MirrorCallback {void ready(boolean ok,String status);}
  public static int attachMirror(SurfaceControl parent,int width,int height,MirrorCallback callback){
   int id=++mirrorSerial;LiveAngles self=current;
-  if(self==null||!self.running||self.worker==null){callback.ready(false,"Angle reader unavailable");return id;}
-  self.worker.post(()->{
+  if(self==null||!self.running||self.mirrorWorker==null){callback.ready(false,"Angle reader unavailable");return id;}
+  self.mirrorWorker.post(()->{
    Parcel p=Parcel.obtain(),r=Parcel.obtain();boolean ok=false;String message;
    try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);p.writeTypedObject(parent,0);p.writeInt(width);p.writeInt(height);
     IBinder binder=self.reader;if(binder==null||!binder.transact(4,p,r,0))throw new IllegalStateException("Mirror reader unavailable");
@@ -40,8 +40,8 @@ public final class LiveAngles {
    boolean success=ok;String status=message;self.main.post(()->callback.ready(success,status));
   });return id;
  }
- public static void detachMirror(int id){LiveAngles self=current;if(id<=0||self==null||self.worker==null)return;
-  self.worker.post(()->{Parcel p=Parcel.obtain(),r=Parcel.obtain();try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);if(self.reader!=null){self.reader.transact(5,p,r,0);r.readException();}}catch(Exception ignored){}finally{p.recycle();r.recycle();}});
+ public static void detachMirror(int id){LiveAngles self=current;if(id<=0||self==null||self.mirrorWorker==null)return;
+  self.mirrorWorker.post(()->{Parcel p=Parcel.obtain(),r=Parcel.obtain();try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);if(self.reader!=null){self.reader.transact(5,p,r,0);r.readException();}}catch(Exception ignored){}finally{p.recycle();r.recycle();}});
  }
  public static void previewCommand(int code,Parcel p,Parcel r)throws Exception{
   LiveAngles self=current;IBinder binder=self==null?null:self.reader;
@@ -59,7 +59,7 @@ public final class LiveAngles {
  public static void add(Listener l){listeners.add(l);if(fresh())l.angle(angle,last*1000000L);}
  public static void remove(Listener l){listeners.remove(l);}
  private final Context context; private final Handler main=new Handler(Looper.getMainLooper());
- private HandlerThread thread; private Handler worker; private volatile boolean running; private volatile IBinder reader;
+ private HandlerThread thread,mirrorThread; private Handler worker; private volatile Handler mirrorWorker; private volatile boolean running; private volatile IBinder reader;
  private WindowManager wm; private View anchor;
  private WindowManager secondaryWm;private View secondaryAnchor;private String anchorKey="",secondaryKey=""; private Shizuku.UserServiceArgs args;
  private volatile long lastPoll;
@@ -94,6 +94,8 @@ public final class LiveAngles {
    running=true;current=this;last=0;count=0;action="org.duofold.live.wallpaperprobe.READ_"+SystemClock.elapsedRealtime();
    ensureAnchors();
    thread=new HandlerThread("duofold-angle-ipc");thread.start();worker=new Handler(thread.getLooper());
+   // Own thread: a mirror attach waits up to 250 ms for its commit and must never queue the 4 ms angle poll.
+   mirrorThread=new HandlerThread("duofold-mirror-ipc");mirrorThread.start();mirrorWorker=new Handler(mirrorThread.getLooper());
    args=new Shizuku.UserServiceArgs(new ComponentName(context,AngleReader.class)).daemon(false).processNameSuffix("fold_angles").version(BuildConfig.VERSION_CODE);
    bound=true;Shizuku.bindUserService(args,connection);status="Connecting to Shizuku…";
    main.postDelayed(()->{if(running&&reader==null){status="Connection timed out — reconnect in app";stop();}},12000);
@@ -189,7 +191,7 @@ public final class LiveAngles {
  private void fail(Exception e){main.post(()->{if(running){RecoveryLog.add("Reader error: "+e.getClass().getSimpleName());status="Reader error: "+e.getMessage();stop();}});}
  public void stop(){continuityRequest=0;HandoffFrames.clear();if(current==this)current=null;nativeInner=false;continuityNative=false;coverPreview=false;running=false;pollInFlight=false;urgentPoll=false;dualActive=false;last=0;if(status.startsWith("LIVE")||status.startsWith("Waiting")||status.startsWith("Connecting"))status="Angle reader stopped";main.removeCallbacksAndMessages(null);
   if(bound){try{Shizuku.unbindUserService(args,connection,true);}catch(Exception ignored){}bound=false;}
-  reader=null;if(thread!=null){thread.quitSafely();thread=null;}
+  reader=null;if(thread!=null){thread.quitSafely();thread=null;}mirrorWorker=null;if(mirrorThread!=null){mirrorThread.quitSafely();mirrorThread=null;}
   if(secondaryAnchor!=null){try{secondaryWm.removeViewImmediate(secondaryAnchor);}catch(Exception ignored){}secondaryAnchor=null;}
   if(anchor!=null){try{wm.removeViewImmediate(anchor);}catch(Exception ignored){}anchor=null;}
  }

@@ -6,11 +6,11 @@ public class AngleReader extends Binder {
  public static final String DESCRIPTOR="org.duofold.live.wallpaperprobe.AngleReader";
  private GlassCapture capture;
  private PreviewExpansion expansion;
- private HandoffFade fade;
- private FoldRotationHold rotation;
+ private volatile HandoffFade fade;
+ private FoldRotationHold rotation,retiringRotation;private long retiringSince;
  private String recoveryApk;
  private final AnimationModePolicy animationMode=new AnimationModePolicy();
- private boolean previewAllowed=false;
+ private volatile boolean previewAllowed=false;
  private final InnerLiveMirror mirror=new InnerLiveMirror();
  private final ConcurrentController concurrent=new ConcurrentController();
  private final ContinuityProbeDiagnostics continuity=new ContinuityProbeDiagnostics();
@@ -19,9 +19,25 @@ public class AngleReader extends Binder {
  private int logLines,matchingResponses,staleResponses;
  private int owner=-1,generation=0,count=0; private float angle=Float.NaN,min=180,max=0; private long last=0; private String state="Idle",raw=""; private java.lang.Process process; private final Set<Float> unique=new HashSet<>();
  public AngleReader(){attachInterface(null,DESCRIPTOR);}
- protected synchronized boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
+ // Mirror attach waits up to 250 ms for its compositor commit. Run it outside this monitor so the 4 ms angle
+ // poll (code 2), which drives the fade and the cover hold, never stalls behind it mid-transition.
+ protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
+  // Shizuku destroy: wait for the rotation restore (up to 8 s) OUTSIDE the monitor, so a code-2 poll in flight
+  // is not held for that long before the process exits.
+  if(code==16777115){FoldRotationHold pending;synchronized(this){pending=rotation!=null?rotation:retiringRotation;stop();}if(pending!=null)pending.awaitRelease();System.exit(0);return true;}
+  if(code==4||code==5){
+   data.enforceInterface(DESCRIPTOR);
+   synchronized(this){int caller=Binder.getCallingUid();if(owner<0)owner=caller;if(caller!=owner)throw new SecurityException("Wrong caller");}
+   if(code==5){mirror.detach(data.readInt());reply.writeNoException();return true;}
+   int id=data.readInt();android.view.SurfaceControl parent=data.readTypedObject(android.view.SurfaceControl.CREATOR);int w=data.readInt(),h=data.readInt();
+   int ticket=mirror.ticket();  // before reading previewAllowed: a revoke after this point invalidates the attach
+   Bundle result=mirror.attach(id,parent,w,h,previewAllowed,ticket);HandoffFade f=fade;if(result.getBoolean("ok")&&f!=null)f.mirrorSubmitted();
+   reply.writeNoException();reply.writeBundle(result);return true;
+  }
+  synchronized(this){return locked(code,data,reply,flags);}
+ }
+ private boolean locked(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
   if(code==INTERFACE_TRANSACTION){reply.writeString(DESCRIPTOR);return true;}
-  if(code==16777115){FoldRotationHold pending=rotation;stop();if(pending!=null)pending.awaitRelease();System.exit(0);return true;}
   data.enforceInterface(DESCRIPTOR);
   int caller=Binder.getCallingUid();if(owner<0)owner=caller;if(caller!=owner)throw new SecurityException("Wrong caller");
   if(code==7){
@@ -40,8 +56,6 @@ public class AngleReader extends Binder {
   if(code==9){boolean inner=data.readInt()!=0;long when=data.readLong();int kind=data.dataAvail()>=4?data.readInt():0;long captured=data.dataAvail()>=8?data.readLong():-1;if(fade!=null)fade.drawn(inner,when,kind,captured);reply.writeNoException();return true;}
   if(code==8){if(expansion==null)expansion=new PreviewExpansion(caller);reply.writeNoException();reply.writeStrongBinder(expansion);return true;}
   if(code==6){if(capture==null)capture=new GlassCapture(caller);reply.writeNoException();reply.writeStrongBinder(capture);return true;}
-  if(code==4){int id=data.readInt();android.view.SurfaceControl parent=data.readTypedObject(android.view.SurfaceControl.CREATOR);int w=data.readInt(),h=data.readInt();Bundle result=mirror.attach(id,parent,w,h,previewAllowed);if(result.getBoolean("ok")&&fade!=null)fade.mirrorSubmitted();reply.writeNoException();reply.writeBundle(result);return true;}
-  if(code==5){mirror.detach(data.readInt());reply.writeNoException();return true;}
   if(code==1){String action=data.readString();if(action==null||!action.matches("org\\.duofold\\.live\\.wallpaperprobe\\.READ_[0-9]+"))throw new IllegalArgumentException("Invalid action");recoveryApk=data.readString();start(action);reply.writeNoException();return true;}
   if(code==2){heartbeat=SystemClock.elapsedRealtime();boolean unlocked=data.readInt()!=0,dual=data.readInt()!=0,primaryInner=data.readInt()!=0,secondaryReady=data.readInt()!=0;int frozenSource=data.readInt();float openThreshold=data.readFloat();boolean live=data.readInt()!=0;boolean appEnabled=data.readInt()!=0;float closedThreshold=FoldThreshold.sanitizeClosed(data.readFloat());float effectiveAngle=FoldThreshold.effectiveAngle(angle,closedThreshold);long probeRequest=data.dataAvail()>=8?data.readLong():0;
    float fadeSmoothing=data.dataAvail()>=4?data.readFloat():FadeSettings.DEFAULT_SMOOTHING;
@@ -54,8 +68,11 @@ public class AngleReader extends Binder {
    boolean effectAllowed=animationMode.update(mode,effectiveAngle,last>0&&heartbeat-last<750);
    boolean mirrorMode=AnimationModePolicy.mirrors(mode);
    appEnabled=appEnabled&&effectAllowed;
-   if(rotation==null)rotation=new FoldRotationHold(caller/100000,recoveryApk);
-   rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);
+   // A new hold only once the previous one has restored rotation and dropped its file lock; creating it earlier
+   // failed with "Another orientation hold is active" and left ~2 s without a hold after a reader restart.
+   // Bounded like awaitRelease(): after 8 s a stuck old hold no longer blocks a new one.
+   if(rotation==null&&(retiringRotation==null||retiringRotation.released()||heartbeat-retiringSince>8000)){retiringRotation=null;rotation=new FoldRotationHold(caller/100000,recoveryApk);}
+   if(rotation!=null)rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);
    if(fade==null)fade=new HandoffFade();
    fade.settings(fadeSmoothing,fadeGradualness,mirrorMode&&!debug,openThreshold);
    fade.update(live&&!dual&&appEnabled&&!handoff.probeHolding(),effectiveAngle,last>0&&heartbeat-last<750);
@@ -68,12 +85,12 @@ public class AngleReader extends Binder {
    if(handoff.probeHolding()&&fade!=null)fade.update(false,effectiveAngle,false);
    if(expansion!=null&&handoff.probeHolding())expansion.enabled(false);
    previewAllowed=mirrorMode&&effectAllowed&&!handoff.probeNative()&&CoverPreviewPolicy.allowed(live,dual,primaryInner,unlocked,handoff.active());
-   if(!previewAllowed)mirror.close();
+   if(!previewAllowed)mirror.revoke();
    continuity.sample(handoff.probeHolding(),handoff.probeStatus());
    Bundle b=new Bundle();b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putBoolean("effectAllowed",effectAllowed);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",expansion==null?"No bridge":expansion.trace);b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);b.putString("raw",raw);reply.writeNoException();reply.writeBundle(b);return true;}
   if(code==3){stop();reply.writeNoException();return true;}return super.onTransact(code,data,reply,flags);
  }
- private synchronized void stop(){previewAllowed=false;if(rotation!=null){rotation.close();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.close();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
+ private synchronized void stop(){previewAllowed=false;if(rotation!=null){rotation.close();retiringRotation=rotation;retiringSince=SystemClock.elapsedRealtime();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.shutdown();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
  private synchronized void start(String action){
   stop();logLines=matchingResponses=staleResponses=0;count=0;unique.clear();angle=Float.NaN;min=180;max=0;last=0;raw="";state="Starting log reader";final int gen=generation;
   Thread reader=new Thread(()->{

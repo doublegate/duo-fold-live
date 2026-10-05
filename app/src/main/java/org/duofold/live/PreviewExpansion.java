@@ -56,7 +56,8 @@ final class PreviewExpansion extends Binder {
    Bitmap bitmap=data.readTypedObject(Bitmap.CREATOR);Bitmap clean=data.readTypedObject(Bitmap.CREATOR);long captured=data.readLong();float seamOffset=data.dataAvail()>=4?RenderQuality.seam(data.readFloat()):.07f;
    boolean frosted=data.dataAvail()>=4&&data.readInt()!=0;boolean rightReady=data.dataAvail()>=4&&data.readInt()!=0;
    if(bitmap==null || clean==null)throw new IllegalArgumentException("No prepared frame");
-   handler.post(()->{try{prepare(bitmap,clean,captured,seamOffset,frosted,rightReady);}catch(Exception e){clear("Expansion prepare failed: "+root(e));}finally{bitmap.recycle();clean.recycle();}});
+   // A post after close() lands on a quit looper and returns false; free the parcelled bitmaps then.
+   if(!handler.post(()->{try{prepare(bitmap,clean,captured,seamOffset,frosted,rightReady);}catch(Exception e){clear("Expansion prepare failed: "+root(e));}finally{bitmap.recycle();clean.recycle();}})){bitmap.recycle();clean.recycle();}
   }else if(code==2){boolean endpoint=data.dataAvail()>=4&&data.readInt()!=0;handler.post(()->{if(layer!=null){pendingReady=true;event(endpoint?"Fully-open clear frame committed":"Fresh inner glass frame committed");if(start>0 && ready<0){ready=SystemClock.elapsedRealtime()-start;status=endpoint?"Fully open; expansion fading":"Inner glass committed; expansion fading";}}});}
   else if(code==3){handler.post(()->{completed=false;clear("Expansion reset");});}
   else throw new IllegalArgumentException("Unknown bridge operation");
@@ -65,14 +66,14 @@ final class PreviewExpansion extends Binder {
  void holdBeforeRelease(){
   if(!enabled || closed)return;
   java.util.concurrent.CountDownLatch committed=new java.util.concurrent.CountDownLatch(1);
-  handler.post(()->{
+  if(!handler.post(()->{
    if(layer==null || start>0 || !PreviewExpansionPolicy.fresh(stamp,SystemClock.elapsedRealtime())){committed.countDown();return;}
    trace="";diagnosticStart=SystemClock.elapsedRealtime();lastSample=0;maxSampleGap=0;offSince=-1;missingSince=-1;lastMapping="";
    event("MEASURED SOFTWARE EVENTS ONLY: panel state is sampled; commit/draw is not photon visibility");
    event("Pre-release hold requested; prepared frame age="+(diagnosticStart-stamp)+" ms");
    start=SystemClock.elapsedRealtime();ready=-1;coverCommit=committed;
    handler.removeCallbacks(tick);tick.run();
-  });
+  }))return;  // helper already closed: nothing will count down, skip the wait
   try{boolean acknowledged=committed.await(24,java.util.concurrent.TimeUnit.MILLISECONDS);
    final long when=SystemClock.elapsedRealtime();handler.post(()->{if(diagnosticStart>0)diagnosticEvent("Pre-release wait ended +"+(when-diagnosticStart)+" ms; commit observed="+acknowledged);});}catch(InterruptedException e){Thread.currentThread().interrupt();}
  }
