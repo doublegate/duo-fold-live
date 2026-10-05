@@ -1,3 +1,12 @@
+## Unreleased — Build and tooling (fork)
+
+- `gradle.properties`: Kotlin incremental compilation and the Kotlin compiler daemon instead of full in-process
+  recompiles, Gradle parallel execution and build cache, 6 GB daemon heap, worker count left at the CPU count.
+  Measured on a 10-core desktop: one-file change + `assembleFold7test` 33 s -> 15.5 s. File-system watching stays
+  at Gradle's default (unsupported on network shares). Upstream's values differ; keep this file out of upstream PRs.
+- `tools/check_inner_stretch.py`: the two shaders are compiled and checked concurrently (3.2 s -> 1.8 s) with the
+  report in a fixed order; a failing invariant still exits non-zero (verified with a deliberately broken assert).
+
 ## 3.5.2-a16.16 — Review fixes from the upstream pull requests (fork)
 
 Fixes for the automated review of upstream PRs #17 and #18 (joeconsorti/duo-fold-live). Verified by unit tests and the

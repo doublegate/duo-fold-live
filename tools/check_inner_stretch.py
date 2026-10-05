@@ -4,6 +4,7 @@ Run: python tools/check_inner_stretch.py (requires a C++ compiler).
 
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +21,8 @@ def function(source, name):
     return source[start:end]
 
 
-for filename in ("DuoGlass.kt", "ClassicGlassShader.kt"):
+def check(filename):
+    """Compile and run one shader's invariant check; returns its report, raises on failure."""
     source = (ROOT / "app/src/main/java/org/duofold/live" / filename).read_text()
     start = source.index("     float distance=earlyInner(")
     end = source.index("     limited=innerHinge-innerHinge*distance;", start)
@@ -64,5 +66,13 @@ int main(){
         binary = Path(folder) / "check"
         cpp.write_text(code)
         subprocess.run(["c++", "-O2", str(cpp), "-o", str(binary)], check=True)
-        print(filename, flush=True)
-        subprocess.run([str(binary)], check=True)
+        run = subprocess.run([str(binary)], capture_output=True, text=True)
+        if run.returncode:
+            raise SystemExit(f"{filename}: FAILED\n{run.stdout}{run.stderr}")
+        return f"{filename}\n{run.stdout}"
+
+
+# The two shaders are independent: compile and check them concurrently, report in a fixed order.
+with ThreadPoolExecutor(max_workers=2) as pool:
+    for report in pool.map(check, ("DuoGlass.kt", "ClassicGlassShader.kt")):
+        print(report, end="", flush=True)
