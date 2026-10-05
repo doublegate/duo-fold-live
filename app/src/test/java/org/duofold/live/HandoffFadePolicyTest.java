@@ -237,7 +237,21 @@ public class HandoffFadePolicyTest {
  }
  // Plan E8: pin every per-model closing cap default; other models keep the upstream 900 ms.
  @Test public void closingReadyTimeoutDefaultsArePinned(){
-  assertEquals(300,HandoffFadePolicy.closingReadyTimeoutFor("SM-F966U1"));
+  assertEquals(380,HandoffFadePolicy.closingReadyTimeoutFor("SM-F966U1"));
   assertEquals(HandoffFadePolicy.READY_TIMEOUT_MS,HandoffFadePolicy.closingReadyTimeoutFor("SM-F971U"));
+ }
+ // Plan F4: readiness evidence carries the panel identity (inner/cover); a late frame from the OLD panel must never
+ // count as the destination's readiness, however fresh it is.
+ @Test public void lateFrameFromTheOldPanelNeverRevealsTheNewOne(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.closingReadyTimeout(380);p.settings(0,0);p.renderer(true,172);p.coverGlass(true);
+  p.opacity(0,true,120,true,true,-1,true);                                              // inner primary
+  assertEquals(1,p.opacity(10,false,94,true,false,-1,true),0);                          // switched to cover, panel OFF
+  assertEquals(1,p.opacity(20,false,94,true,true,-1,true),0);                           // cover ON at 20
+  int glass=HandoffFadePolicy.GLASS_COMMITTED;
+  assertEquals(1,p.opacity(60,false,94,true,true,50,true,glass,40),0);                  // fresh INNER frame...
+  assertEquals(1,p.opacity(160,false,94,true,true,50,true,glass,40),0);                 // ...still ignored 100 ms on
+  assertEquals(1,p.opacity(161,false,94,true,true,161,false,glass,155),0);              // cover frame: readiness
+  assertEquals(1,p.opacity(170,false,94,true,true,161,false,glass,155),0);              // reveal starts (0 % yet)
+  assertTrue(p.opacity(220,false,94,true,true,161,false,glass,155)<1f);                 // and progresses
  }
 }

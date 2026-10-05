@@ -1,3 +1,23 @@
+## 3.5.2-a16.13 — Closing cap from capture data, lighter poll replies; remediation plan complete (fork, Phase F)
+
+Plan Phase F (F2-F6; F1 and F7 landed in a16.9). This completes `docs/fold7/remediation-plan-2026-10-04.md`.
+Verified by unit tests only; on-device verification of all phases is next.
+
+- Fold 7 closing reveal cap ON+300 -> ON+380 ms (F2). In the 2026-10-04 capture 7 of 10 closes confirmed cover glass
+  at ON+190-281 ms; the 3 that hit the cap had their first capture at ON+230-265 ms and commit lags of up to 114 ms,
+  so their frames landed just past 300 ms and they revealed on the fallback instead. Worst case +80 ms of black.
+- **All models:** the angle-poll reply carries its ~10 diagnostic status strings at most every 250 ms instead of on
+  every 4 ms poll; angles, counts, flags and reader state still go out every poll, and the client keeps the previous
+  strings in between (F5).
+- Readiness evidence from the old panel can never reveal the new one: a pinned test (shown to fail without the panel
+  check) documents that the inner/cover identity on every draw already guarantees this (F4).
+- Decision (F3): no zero-copy (HardwareBuffer) capture path. Successful captures complete 58-146 ms after the request,
+  so the black is bound by post-switch compositor/surface start-up and occasional 250 ms timeouts, not by the copy;
+  the live frame also feeds software consumers (`frost()`, the hold's `getPixels`). Recorded in the plan.
+- Owner workspace tooling: `transition_sheets.py` writes `summary.txt` from the logs (per-switch ON/reveal/clear and
+  reason, sleep-path closes, gate defers, fallback events), since screen recordings drop frames at every switch (F6).
+- Tests: `DiagnosticsCadenceTest`, closing-cap default, the F4 old-panel test.
+
 ## 3.5.2-a16.12 — One source for the handoff angles, endpoint freshness, test coverage (fork, Phase E)
 
 Plan Phase E (E3-E5, E7-E9; E1, E2 and E6 landed with the plan). Verified by unit tests only.

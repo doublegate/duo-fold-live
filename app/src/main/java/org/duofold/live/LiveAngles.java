@@ -157,14 +157,19 @@ public final class LiveAngles {
    if(ReaderRecovery.needsRestart(b.getString("state"))){main.post(()->{if(running){RecoveryLog.add("Expired wallpaper reader lease; paced recovery");stop();status="Reader lease expired — awaiting recovery";}});return;}
    main.post(()->{
    if(!running)return;
-   String nextHandoff=b.getString("handoff", "Unknown display status");
-   if(!nextHandoff.equals(handoffStatus))RecoveryLog.add(nextHandoff);
-   handoffStatus=nextHandoff;continuityStatus=b.getString("continuityProbe","Continuity status unavailable");continuityTrace=b.getString("continuityTrace","");
-   rotationHold=b.getString("rotationHold","Rotation hold idle");effectAllowed=b.getBoolean("effectAllowed",true);handoffFade=b.getString("handoffFade","Handoff fade idle");dualActive=b.getBoolean("dualActive");coverPreview=b.getBoolean("coverPreview");expansionStatus=b.getString("expansion","Expansion idle");bridgeTrace=b.getString("bridgeTrace","No bridge");
-   mirrorStatus=b.getString("mirror","Inner mirror status unavailable");nativeInner=b.getBoolean("nativeInner");continuityNative=b.getBoolean("continuityNative");
+   // Status strings arrive at most every 250 ms (plan F5); keep the previous ones in between. Older readers
+   // without the flag send them on every poll.
+   if(b.getBoolean("diag",true)){
+    String nextHandoff=b.getString("handoff", "Unknown display status");
+    if(!nextHandoff.equals(handoffStatus))RecoveryLog.add(nextHandoff);
+    handoffStatus=nextHandoff;continuityStatus=b.getString("continuityProbe","Continuity status unavailable");continuityTrace=b.getString("continuityTrace","");
+    rotationHold=b.getString("rotationHold","Rotation hold idle");handoffFade=b.getString("handoffFade","Handoff fade idle");expansionStatus=b.getString("expansion","Expansion idle");bridgeTrace=b.getString("bridgeTrace","No bridge");
+    mirrorStatus=b.getString("mirror","Inner mirror status unavailable");readerDiagnostics=b.getString("readerDiagnostics",b.getString("state","Unknown"));
+   }
+   effectAllowed=b.getBoolean("effectAllowed",true);dualActive=b.getBoolean("dualActive");coverPreview=b.getBoolean("coverPreview");
+   nativeInner=b.getBoolean("nativeInner");continuityNative=b.getBoolean("continuityNative");
    StandaloneService host=StandaloneService.Companion.getInstance();if(host!=null&&SystemClock.elapsedRealtime()>=secondaryRefreshAt){secondaryRefreshAt=SystemClock.elapsedRealtime()+(PollCadence.fast(SystemClock.elapsedRealtime()-angleChangedAt,fresh()?angle:Float.NaN)?8:100);host.refreshSecondary();}
    lastPoll=SystemClock.elapsedRealtime();
-   readerDiagnostics=b.getString("readerDiagnostics",b.getString("state","Unknown"));
    long stamp=b.getLong("last");int received=b.getInt("count");
    ratePolls++;
    if(received>rateReceived){rateReplies+=received-rateReceived;if(Float.compare(angle,b.getFloat("angle"))!=0)rateChanges++;}

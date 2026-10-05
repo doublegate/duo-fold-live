@@ -21,6 +21,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | 3.5.2-a16.10 | Phase C | Hot paths: band hold, keyguard caches, settled shade, cached display info, probe rate limit. |
 | 3.5.2-a16.11 | Phase D | Service races: mirror attach generation, ticker reset, bounded settings commands, exclusion copies, rotation hand-over, destroy wait. |
 | 3.5.2-a16.12 | Phase E | Shared hysteresis constants and defer timer, endpoint freshness, tests. |
+| 3.5.2-a16.13 | Phase F | Closing cap 380 ms, diagnostics cadence; plan complete. |
 
 ## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
 
@@ -29,7 +30,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | Full-black angle, closing / opening | 94 / 101 deg | 94 / 98 deg | `blackAnglesFor` | Measured switch at 92-94 deg closing, 101-102 deg opening (wallpaper angle log vs DisplayManager). |
 | Reveal cap, no-glass path | ON+40 ms | ON+900 ms | `readyTimeoutFor` | Duo draws only on new angles; the wallpaper sends none for 0.3-0.5 s after a switch. |
 | Reveal cap, opening (unified) | ON+600 ms | ON+900 ms | `openingReadyTimeoutFor` | First inner glass frame commits 300-450 ms after the switch; revealing earlier exposed the mirrored hold. |
-| Reveal cap, closing (unified) | ON+300 ms | ON+900 ms | `closingReadyTimeoutFor` | The cover draws faster than the inner panel. |
+| Reveal cap, closing (unified) | ON+380 ms | ON+900 ms | `closingReadyTimeoutFor` | The cover draws faster than the inner panel; 300 ms capped 3/10 closes whose frames landed at ON+260-380 ms. |
 | Fresh-content window (reveal readiness and the fully-open endpoint) | 700 ms | 350 ms | `freshWindowFor` | The first post-switch capture alone takes up to ~400 ms. |
 | Reveal length at 0 % gradualness | 100 ms | 180 ms | `revealBaseFor` | Reads as a short blink rather than a fade. |
 | Re-check cadence during a switch | 16 ms | 80 ms | `tickDelayMs` | VSYNC can stop while a panel is OFF. |

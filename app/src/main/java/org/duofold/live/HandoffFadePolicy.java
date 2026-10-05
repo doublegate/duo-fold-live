@@ -72,8 +72,13 @@ final class HandoffFadePolicy {
  static long freshWindowFor(String model){return DeviceCompatibility.isFold7(model)?700:FRESH_WINDOW_MS;}
  private long freshWindow=FRESH_WINDOW_MS;
  void freshWindow(long ms){freshWindow=ms>=100&&ms<=2000?ms:FRESH_WINDOW_MS;}
- /** Closing (destination = cover) cap when waiting for cover glass; the cover draws faster than the inner. */
- static long closingReadyTimeoutFor(String model){return DeviceCompatibility.isFold7(model)?300:READY_TIMEOUT_MS;}
+ /**
+  * Closing (destination = cover) cap when waiting for cover glass; the cover draws faster than the inner. Fold 7
+  * (plan F2, 2026-10-04 capture): 7/10 closes confirmed glass at ON+190-281 ms; the 3 that hit a 300 ms cap had their
+  * first capture at ON+230-265 ms and commit lags up to 114 ms, so their frames landed just past it. 380 ms lets those
+  * reveal on a confirmed frame (worst case +80 ms of black) instead of the fallback.
+  */
+ static long closingReadyTimeoutFor(String model){return DeviceCompatibility.isFold7(model)?380:READY_TIMEOUT_MS;}
  private long closingReadyTimeout=-1;
  void closingReadyTimeout(long ms){closingReadyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:-1;}
  void openingReadyTimeout(long ms){openingReadyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:-1;}
