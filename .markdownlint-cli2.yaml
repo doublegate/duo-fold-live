@@ -1,0 +1,12 @@
+# Lints the documents this fork maintains. Upstream release notes under docs/*.md, reference/ and upstream/
+# are historical and left as published.
+config:
+  default: true
+  MD013: false          # long technical table rows and paragraphs are intentional
+  MD041: false          # CHANGELOG starts at the newest version heading
+  MD024:
+    siblings_only: true # repeated sub-headings per release
+globs:
+  - "README.md"
+  - "CHANGELOG.md"
+  - "docs/fold7/**/*.md"

@@ -1,0 +1,1049 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.10.1" type="baseline" client="gradle" dependencies="false" name="AGP (8.10.1)" variant="all" version="8.10.1">
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="   p.edit().putInt(&quot;state&quot;,1).putInt(&quot;step&quot;,2).putBoolean(&quot;repair_required&quot;,true).commit()"
+        errorLine2="                                                                                  ~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/FirstRun.kt"
+            line="9"
+            column="83"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="  if(marker==0)p.edit().putInt(&quot;state&quot;,if(needed)1 else 3).commit()"
+        errorLine2="                                                           ~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/FirstRun.kt"
+            line="16"
+            column="60"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="     prefs.edit().remove(KEY).commit();ownsLease=false"
+        errorLine2="                              ~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/InnerDecorRecovery.kt"
+            line="42"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="         prefs.edit().putInt(&quot;state&quot;,2).commit()"
+        errorLine2="                                        ~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="192"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="  p.edit().putBoolean(KEY,active).commit();return active;"
+        errorLine2="                                  ~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperRestore.java"
+            line="28"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="DataExtractionRules"
+        message="The attribute `android:allowBackup` is deprecated from Android 12 and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures backups and device transfers on Android 12 and higher."
+        errorLine1=" &lt;application android:name=&quot;.DuoApplication&quot; android:label=&quot;Duo Fold Live&quot; android:icon=&quot;@drawable/icon&quot; android:theme=&quot;@style/Theme.Standalone&quot; android:allowBackup=&quot;false&quot; android:hardwareAccelerated=&quot;true&quot;>"
+        errorLine2="                                                                                                                                                                      ~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="12"
+            column="167"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="   protected void onDraw(Canvas c){super.onDraw(c);Bitmap b=bitmap;if(b==null||b.isRecycled())return;float scale=Math.max((float)getWidth()/b.getWidth(),(float)getHeight()/b.getHeight());float w=b.getWidth()*scale,h=b.getHeight()*scale;c.drawBitmap(b,null,new RectF((getWidth()-w)/2,(getHeight()-h)/2,(getWidth()+w)/2,(getHeight()+h)/2),p);if(traceNextDraw||getTag()!=null){String reason=String.valueOf(getTag());setTag(null);traceNextDraw=false;trace(&quot;Display &quot;+id+&quot; photo draw callback &quot;+getWidth()+&quot;x&quot;+getHeight()+&quot;; &quot;+reason);}}};"
+        errorLine2="                                                                                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/LayerHost.java"
+            line="99"
+            column="257"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `LiveAngles` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1=" private static volatile LiveAngles current;"
+        errorLine2="         ~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/LiveAngles.java"
+            line="28"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `StandaloneService` which has field `windowContext` pointing to `Context`); this is a memory leak"
+        errorLine1="    companion object { var instance: StandaloneService? = null; private set }"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/StandaloneService.kt"
+            line="34"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `FrostSurface` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {"
+        errorLine2="               ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/DuoGlass.kt"
+            line="205"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `LivePanelSurface` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="internal class LivePanelSurface(context:Context,private val result:(Boolean,String)->Unit):SurfaceView(context),SurfaceHolder.Callback {"
+        errorLine2="               ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/LivePanelSurface.kt"
+            line="5"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="   if(selected!=id){selected=id;prefs.edit().putString(&quot;wallpaper_profile&quot;,id).putBoolean(&quot;wallpaper_verified&quot;,false).putBoolean(&quot;repair_required&quot;,true).apply();onChanged()}"
+        errorLine2="                                ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/DeviceProfileChoice.kt"
+            line="16"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.scale` instead?"
+        errorLine1="       level=f.levels.getOrNull(i-1) ?: Bitmap.createScaledBitmap(level,maxOf(1,level.width/2),maxOf(1,level.height/2),true)"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/DuoGlass.kt"
+            line="378"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="   p.edit().putInt(&quot;state&quot;,1).putInt(&quot;step&quot;,2).putBoolean(&quot;repair_required&quot;,true).commit()"
+        errorLine2="   ~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/FirstRun.kt"
+            line="9"
+            column="4"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="  if(marker==0)p.edit().putInt(&quot;state&quot;,if(needed)1 else 3).commit()"
+        errorLine2="               ~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/FirstRun.kt"
+            line="16"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="   if(!prefs.edit().putBoolean(&quot;auto_keep_cover_awake&quot;,true).commit())RecoveryLog.add(&quot;Keep-awake ON; preference save needs retry&quot;)"
+        errorLine2="       ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/FoldAwakeDefault.kt"
+            line="17"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.scale` instead?"
+        errorLine1=" private fun levels(bitmap:Bitmap):List&lt;Bitmap>{val out=ArrayList&lt;Bitmap>();var level=bitmap;repeat(7){level=Bitmap.createScaledBitmap(level,maxOf(1,level.width/2),maxOf(1,level.height/2),true);out.add(level)};return out}"
+        errorLine2="                                                                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/GlassFrames.kt"
+            line="17"
+            column="110"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="     prefs.edit().remove(KEY).commit();ownsLease=false"
+        errorLine2="     ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/InnerDecorRecovery.kt"
+            line="42"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="   if(!prefs.edit().putString(KEY,journal).commit()){busy=false;status=&quot;Display policy unchanged: could not save restoration journal&quot;;return@request}"
+        errorLine2="       ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/InnerDecorRecovery.kt"
+            line="67"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="    fun selectMode(value:String){mode=value;animationStyle=&quot;duo&quot;;dual=false;liveMirror=true;prefs.edit().putString(&quot;animation_mode&quot;,value).putBoolean(&quot;dual&quot;,false).putBoolean(&quot;cover_preview&quot;,true).putString(&quot;animation_style&quot;,&quot;duo&quot;).putBoolean(&quot;debug_mode&quot;,false).apply();debug=false;restart()}"
+        errorLine2="                                                                                            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="93"
+            column="93"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="    fun booleanSetting(key:String,value:Boolean){prefs.edit().putBoolean(key,value).apply();restart()}"
+        errorLine2="                                                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="94"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       Slider(value=smoothing,onValueChange={smoothing=it},valueRange=12f..120f,onValueChangeFinished={prefs.edit().putFloat(&quot;smoothing_ms&quot;,smoothing).apply();restart()})"
+        errorLine2="                                                                                                       ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="141"
+            column="104"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       TextButton(onClick={smoothing=30f;prefs.edit().putFloat(&quot;smoothing_ms&quot;,30f).apply();restart()}){Text(&quot;Reset smoothness&quot;)}"
+        errorLine2="                                         ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="143"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       Slider(value=blurStrength,onValueChange={blurStrength=it},valueRange=0f..3f,onValueChangeFinished={prefs.edit().putFloat(&quot;blur_strength&quot;,blurStrength).apply();restart()})"
+        errorLine2="                                                                                                          ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="145"
+            column="107"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       TextButton(onClick={blurStrength=.3f;prefs.edit().putFloat(&quot;blur_strength&quot;,.3f).apply();restart()}){Text(&quot;Reset blur amount&quot;)}"
+        errorLine2="                                            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="147"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       Slider(value=intensity,onValueChange={intensity=it},valueRange=.3f..1.5f,onValueChangeFinished={prefs.edit().putFloat(&quot;intensity&quot;,intensity).apply();restart()})"
+        errorLine2="                                                                                                       ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="149"
+            column="104"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       TextButton(onClick={intensity=1f;prefs.edit().putFloat(&quot;intensity&quot;,1f).apply();restart()}){Text(&quot;Reset glass strength&quot;)}"
+        errorLine2="                                        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="150"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       Slider(value=fadeSmoothing,onValueChange={fadeSmoothing=it},valueRange=0f..120f,onValueChangeFinished={prefs.edit().putFloat(&quot;fade_smoothing_ms&quot;,fadeSmoothing).apply()})"
+        errorLine2="                                                                                                              ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="152"
+            column="111"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       Slider(value=fadeGradualness,onValueChange={fadeGradualness=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat(&quot;fade_gradualness&quot;,fadeGradualness).apply()})"
+        errorLine2="                                                                                                                ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="155"
+            column="113"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="       TextButton(onClick={fadeSmoothing=FadeSettings.DEFAULT_SMOOTHING;fadeGradualness=FadeSettings.DEFAULT_GRADUALNESS;prefs.edit().putFloat(&quot;fade_smoothing_ms&quot;,fadeSmoothing).putFloat(&quot;fade_gradualness&quot;,fadeGradualness).apply()}){Text(&quot;Reset black fade&quot;)}"
+        errorLine2="                                                                                                                         ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="157"
+            column="122"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse(&quot;package:$packageName&quot;)))}){Text(&quot;Allow overlays&quot;)}"
+        errorLine2="                                                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="173"
+            column="96"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse(&quot;package:$packageName&quot;)))}){Text(&quot;App &amp; battery settings&quot;)}"
+        errorLine2="                                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="177"
+            column="99"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        for((v2,label) in listOf(false to &quot;Original&quot;,true to &quot;V2 Window Reveal · experimental&quot;))TextButton(onClick={windowReveal=v2;prefs.edit().putBoolean(&quot;window_reveal_v2&quot;,v2).apply();restart()}){Text((if(windowReveal==v2)&quot;✓ &quot; else &quot;&quot;)+label)}"
+        errorLine2="                                                                                                                                    ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="184"
+            column="133"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         Slider(value=coverVertical,onValueChange={coverVertical=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat(&quot;cover_vertical_compression&quot;,coverVertical).apply();restart()})"
+        errorLine2="                                                                                                              ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="192"
+            column="111"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         TextButton(onClick={coverVertical=1.15f;prefs.edit().putFloat(&quot;cover_vertical_compression&quot;,1.15f).apply();restart()}){Text(&quot;Reset vertical compression&quot;)}"
+        errorLine2="                                                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="194"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         Slider(value=earlyStretch,onValueChange={earlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat(&quot;early_stretch&quot;,earlyStretch*3f).apply();restart()})"
+        errorLine2="                                                                                                            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="199"
+            column="109"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         TextButton(onClick={earlyStretch=.9f;prefs.edit().putFloat(&quot;early_stretch&quot;,2.7f).apply();restart()}){Text(&quot;Reset early stretch&quot;)}"
+        errorLine2="                                              ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="201"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="          Slider(value=endStretch,onValueChange={endStretch=it},valueRange=.8f..1.5f,onValueChangeFinished={prefs.edit().putFloat(&quot;end_stretch&quot;,endStretch).apply();restart()})"
+        errorLine2="                                                                                                            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="205"
+            column="109"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="          TextButton(onClick={endStretch=1.25f;prefs.edit().putFloat(&quot;end_stretch&quot;,1.25f).apply();restart()}){Text(&quot;Reset end stretch&quot;)}"
+        errorLine2="                                               ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="207"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         Slider(value=innerVertical,onValueChange={innerVertical=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat(&quot;inner_vertical_compression&quot;,innerVertical).apply();restart()})"
+        errorLine2="                                                                                                              ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="216"
+            column="111"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         TextButton(onClick={innerVertical=.6f;prefs.edit().putFloat(&quot;inner_vertical_compression&quot;,.6f).apply();restart()}){Text(&quot;Reset vertical compression&quot;)}"
+        errorLine2="                                               ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="218"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         Slider(value=innerEarlyStretch,onValueChange={innerEarlyStretch=it},valueRange=0f..1f,onValueChangeFinished={prefs.edit().putFloat(&quot;inner_early_stretch&quot;,innerEarlyStretch*3f).apply();restart()})"
+        errorLine2="                                                                                                                      ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="223"
+            column="119"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         TextButton(onClick={innerEarlyStretch=.3f;prefs.edit().putFloat(&quot;inner_early_stretch&quot;,.9f).apply();restart()}){Text(&quot;Reset early stretch&quot;)}"
+        errorLine2="                                                   ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="225"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="          Slider(value=innerEndStretch,onValueChange={innerEndStretch=it},valueRange=0f..1.5f,onValueChangeFinished={prefs.edit().putFloat(&quot;inner_end_stretch&quot;,innerEndStretch).apply();restart()})"
+        errorLine2="                                                                                                                     ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="229"
+            column="118"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="          TextButton(onClick={innerEndStretch=.45f;prefs.edit().putFloat(&quot;inner_end_stretch&quot;,.45f).apply();restart()}){Text(&quot;Reset end stretch&quot;)}"
+        errorLine2="                                                   ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="231"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         for((id,label) in listOf(0 to &quot;Lightweight Texture Filtering&quot;,1 to &quot;Edge-Adaptive Smoothing · experimental&quot;,2 to &quot;4× Supersampling · experimental&quot;))TextButton(onClick={antialiasMode=id;prefs.edit().putInt(&quot;antialias_method_v2&quot;,id).apply();restart()}){Text((if(antialiasMode==id)&quot;✓ &quot; else &quot;&quot;)+label)}"
+        errorLine2="                                                                                                                                                                                                  ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="238"
+            column="195"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         Slider(value=antialiasStrength,onValueChange={antialiasStrength=it},valueRange=.2f..0.5f,onValueChangeFinished={prefs.edit().putFloat(&quot;antialias_strength&quot;,antialiasStrength).apply();restart()})"
+        errorLine2="                                                                                                                         ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="241"
+            column="122"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         TextButton(onClick={antialiasStrength=.35f;prefs.edit().putFloat(&quot;antialias_strength&quot;,.35f).apply();restart()}){Text(&quot;Reset anti-aliasing&quot;)}"
+        errorLine2="                                                    ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="242"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        for(rate in listOf(12,60,120))TextButton(onClick={contentFps=rate;prefs.edit().putInt(&quot;content_fps&quot;,rate).apply();restart()}){Text((if(contentFps==rate)&quot;✓ &quot; else &quot;&quot;)+when(rate){12->&quot;Legacy · approximately 12 FPS&quot;;120->&quot;120 FPS · experimental&quot;;else->&quot;60 FPS · lower GPU cost&quot;})}"
+        errorLine2="                                                                          ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="246"
+            column="75"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        Slider(value=seamOffset,onValueChange={seamOffset=it},valueRange=0f..0.15f,onValueChangeFinished={prefs.edit().putFloat(&quot;seam_offset&quot;,seamOffset).apply();restart()})"
+        errorLine2="                                                                                                          ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="252"
+            column="107"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        Slider(value=threshold,onValueChange={threshold=it.roundToInt().toFloat()},valueRange=165f..179f,steps=13,onValueChangeFinished={prefs.edit().putFloat(&quot;open_threshold&quot;,threshold).apply();restart()})"
+        errorLine2="                                                                                                                                         ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="255"
+            column="138"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        TextButton(onClick={threshold=172f;prefs.edit().putFloat(&quot;open_threshold&quot;,172f).apply();restart()}){Text(&quot;Reset to 172°&quot;)}"
+        errorLine2="                                           ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="257"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        Slider(value=closedThreshold,onValueChange={closedThreshold=it.roundToInt().toFloat()},valueRange=1f..10f,steps=8,onValueChangeFinished={prefs.edit().putFloat(&quot;closed_threshold&quot;,closedThreshold).apply();restart()})"
+        errorLine2="                                                                                                                                                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="259"
+            column="146"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        TextButton(onClick={closedThreshold=2f;prefs.edit().putFloat(&quot;closed_threshold&quot;,2f).apply();restart()}){Text(&quot;Reset to 2°&quot;)}"
+        errorLine2="                                               ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="261"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         OutlinedButton(onClick={animationStyle=&quot;classic&quot;;prefs.edit().putString(&quot;animation_style&quot;,&quot;classic&quot;).apply();restart()}){Text(&quot;Use legacy Classic Glass&quot;)}"
+        errorLine2="                                                          ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/MainActivity.kt"
+            line="285"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.scale` instead?"
+        errorLine1="  val reduced=Bitmap.createScaledBitmap(source,w,h,true)"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/PreviewTransition.kt"
+            line="119"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="   if(prefs.edit().putBoolean(DONE,true).commit())status=&quot;Automatic rotation repair: fresh install; not needed&quot;"
+        errorLine2="      ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/RotationMigration.kt"
+            line="20"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="   if(result.getBoolean(&quot;ok&quot;)&amp;&amp;app.getSharedPreferences(&quot;standalone&quot;,0).edit().putBoolean(DONE,true).commit()){"
+        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/RotationMigration.kt"
+            line="37"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Int.toDrawable` instead?"
+        errorLine1="   setBackgroundDrawable(ColorDrawable(if(nativeContent)Color.TRANSPARENT else Color.BLACK));if(nativeContent)setFormat(android.graphics.PixelFormat.TRANSLUCENT) else addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SecondaryShade.kt"
+            line="88"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="     if(success){prefs.edit().putBoolean(&quot;wallpaper_verified&quot;,true).remove(&quot;repair_required&quot;).apply();go(3)}"
+        errorLine2="                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="58"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1=" private fun go(step:Int){stage=step;prefs.edit().putInt(&quot;step&quot;,step).apply()}"
+        errorLine2="                                     ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="66"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="  attempted=true;prefs.edit().putBoolean(&quot;wallpaper_verified&quot;,false).apply();applying=true;message=&quot;Applying the required fold wallpaper to both home screens…&quot;"
+        errorLine2="                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="73"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1=" private fun link(url:String)=open(Intent(Intent.ACTION_VIEW,Uri.parse(url)))"
+        errorLine2="                                                             ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="78"
+            column="62"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        FilterChip(selected=!custom,onClick={custom=false;prefs.edit().putBoolean(&quot;custom&quot;,false).apply()},label={Text(&quot;No · use Samsung’s wallpaper&quot;)})"
+        errorLine2="                                                          ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="140"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        FilterChip(selected=custom,onClick={custom=true;prefs.edit().putBoolean(&quot;custom&quot;,true).apply()},label={Text(&quot;Yes · choose my photo&quot;)})"
+        errorLine2="                                                        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="141"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        OutlinedButton(onClick={open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse(&quot;package:$packageName&quot;)))}){Text(if(overlay)&quot;Overlay access granted&quot; else &quot;Allow display over other apps&quot;)}"
+        errorLine2="                                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="184"
+            column="87"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        OutlinedButton(onClick={open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse(&quot;package:$packageName&quot;)))}){Text(&quot;Open app info&quot;)}"
+        errorLine2="                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="187"
+            column="90"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="         getSharedPreferences(&quot;standalone&quot;,0).edit().putBoolean(&quot;enabled&quot;,true).putBoolean(&quot;auto_keep_cover_awake&quot;,true).apply()"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/SetupActivity.kt"
+            line="193"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="   OutlinedButton(onClick={runCatching{c.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse(&quot;package:${c.packageName}&quot;)))}}){Text(&quot;Duo app &amp; battery settings&quot;)}"
+        errorLine2="                                                                                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/ShizukuHelp.kt"
+            line="31"
+            column="108"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="   TextButton(onClick={runCatching{c.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(&quot;https://shizuku.rikka.app/guide/setup/&quot;)))}}){Text(&quot;Official Shizuku guide&quot;)}"
+        errorLine2="                                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/ShizukuHelp.kt"
+            line="42"
+            column="78"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="   TextButton(onClick={runCatching{c.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(&quot;https://github.com/thejaustin/ShizukuPlus/releases&quot;)))}}){Text(&quot;Shizuku+ project &amp; version-specific help&quot;)}"
+        errorLine2="                                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/ShizukuHelp.kt"
+            line="43"
+            column="78"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1=" OutlinedButton(onClick={runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(&quot;https://github.com/thejaustin/ShizukuPlus/releases&quot;)))}.onFailure{android.widget.Toast.makeText(context,&quot;Could not open the link. Visit github.com/thejaustin/ShizukuPlus/releases in your browser.&quot;,android.widget.Toast.LENGTH_LONG).show()}}){Text(&quot;Download Shizuku+&quot;)}"
+        errorLine2="                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/ShizukuHelp.kt"
+            line="51"
+            column="86"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" final ServiceConnection connection=new ServiceConnection(){public void onServiceConnected(ComponentName n,IBinder b){remote=b;connecting=false;if(startOnConnect){startOnConnect=false;startRemote();}else{h.removeCallbacks(poll);h.post(poll);}}public void onServiceDisconnected(ComponentName n){remote=null;status.setText(&quot;Shizuku connection ended. Reopen Shizuku if needed; Disable wallpaper still removes the photo layer.&quot;);}};"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="6"
+            column="322"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" button(steps,&quot;Enable custom wallpaper&quot;,()->{try{if(!photo.exists()){status.setText(&quot;Choose a photo first.&quot;);return;}if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0){status.setText(&quot;Authorize Shizuku first.&quot;);return;}if(remote!=null&amp;&amp;remote.isBinderAlive()){startRemote();return;}if(connecting)return;startOnConnect=true;connecting=true;args=WallpaperRestore.args(this);Shizuku.bindUserService(args,connection);status.setText(&quot;Connecting…&quot;);}catch(Exception e){connecting=false;status.setText(e.toString());}});"
+        errorLine2="                                                                                    ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="17"
+            column="85"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" button(steps,&quot;Enable custom wallpaper&quot;,()->{try{if(!photo.exists()){status.setText(&quot;Choose a photo first.&quot;);return;}if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0){status.setText(&quot;Authorize Shizuku first.&quot;);return;}if(remote!=null&amp;&amp;remote.isBinderAlive()){startRemote();return;}if(connecting)return;startOnConnect=true;connecting=true;args=WallpaperRestore.args(this);Shizuku.bindUserService(args,connection);status.setText(&quot;Connecting…&quot;);}catch(Exception e){connecting=false;status.setText(e.toString());}});"
+        errorLine2="                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="17"
+            column="193"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" button(steps,&quot;Enable custom wallpaper&quot;,()->{try{if(!photo.exists()){status.setText(&quot;Choose a photo first.&quot;);return;}if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0){status.setText(&quot;Authorize Shizuku first.&quot;);return;}if(remote!=null&amp;&amp;remote.isBinderAlive()){startRemote();return;}if(connecting)return;startOnConnect=true;connecting=true;args=WallpaperRestore.args(this);Shizuku.bindUserService(args,connection);status.setText(&quot;Connecting…&quot;);}catch(Exception e){connecting=false;status.setText(e.toString());}});"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                                                                                                                                     ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="17"
+            column="438"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" button(steps,&quot;Disable custom wallpaper&quot;,()->{try{WallpaperRestore.setEnabled(this,false);status.setText(&quot;Stop requested; removing photo layer.&quot;);h.removeCallbacks(poll);h.postDelayed(poll,200);}catch(Exception e){status.setText(e.toString());}});"
+        errorLine2="                                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="18"
+            column="106"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" button(lockCard,&quot;Apply this photo to both lock screens&quot;,()->{if(!photo.exists()){status.setText(&quot;Choose a photo first.&quot;);return;}h.removeCallbacks(poll);status.setText(&quot;Applying lock-screen photos…&quot;);new Thread(()->{String result;try{result=LockPhotoApplier.apply(this,photo);java.nio.file.Files.write(new File(getFilesDir(),&quot;lock-photo-status.txt&quot;).toPath(),result.getBytes(java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){result=&quot;Lock photo action failed: &quot;+e;}final String message=result;runOnUiThread(()->{status.setText(brief(message));Toast.makeText(this,&quot;Lock-screen action finished; see status&quot;,Toast.LENGTH_LONG).show();h.postDelayed(poll,10000);});},&quot;Apply lock photos&quot;).start();});"
+        errorLine2="                                                                                                 ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="31"
+            column="98"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" button(lockCard,&quot;Apply this photo to both lock screens&quot;,()->{if(!photo.exists()){status.setText(&quot;Choose a photo first.&quot;);return;}h.removeCallbacks(poll);status.setText(&quot;Applying lock-screen photos…&quot;);new Thread(()->{String result;try{result=LockPhotoApplier.apply(this,photo);java.nio.file.Files.write(new File(getFilesDir(),&quot;lock-photo-status.txt&quot;).toPath(),result.getBytes(java.nio.charset.StandardCharsets.UTF_8));}catch(Exception e){result=&quot;Lock photo action failed: &quot;+e;}final String message=result;runOnUiThread(()->{status.setText(brief(message));Toast.makeText(this,&quot;Lock-screen action finished; see status&quot;,Toast.LENGTH_LONG).show();h.postDelayed(poll,10000);});},&quot;Apply lock photos&quot;).start();});"
+        errorLine2="                                                                                                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="31"
+            column="170"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" button(help,&quot;Share unlock trace&quot;,()->{try{if(UnlockTrace.capturing()){status.setText(&quot;Wait until capture finishes.&quot;);return;}startActivity(UnlockTrace.share(this));}catch(Exception e){status.setText(e.getMessage());}});"
+        errorLine2="                                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="37"
+            column="87"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" CheckBox renderer=new CheckBox(this);renderer.setText(&quot;Native compositor photo · apply on next enable&quot;);renderer.setTextColor(-1);renderer.setChecked(!new File(getFilesDir(),&quot;legacy-renderer&quot;).exists());renderer.setOnCheckedChangeListener((v,checked)->{try{File marker=new File(getFilesDir(),&quot;legacy-renderer&quot;);if(checked)marker.delete();else marker.createNewFile();status.setText(&quot;Renderer saved. Disable, then enable the wallpaper to apply.&quot;);}catch(Exception e){status.setText(e.toString());}});developer.addView(renderer);"
+        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="40"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" CheckBox renderer=new CheckBox(this);renderer.setText(&quot;Native compositor photo · apply on next enable&quot;);renderer.setTextColor(-1);renderer.setChecked(!new File(getFilesDir(),&quot;legacy-renderer&quot;).exists());renderer.setOnCheckedChangeListener((v,checked)->{try{File marker=new File(getFilesDir(),&quot;legacy-renderer&quot;);if(checked)marker.delete();else marker.createNewFile();status.setText(&quot;Renderer saved. Disable, then enable the wallpaper to apply.&quot;);}catch(Exception e){status.setText(e.toString());}});developer.addView(renderer);"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="40"
+            column="383"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" CheckBox wake=new CheckBox(this);wake.setText(&quot;Independent wake photo · apply on next enable&quot;);wake.setTextColor(-1);wake.setChecked(!new File(getFilesDir(),&quot;disable-wake-layer&quot;).exists());wake.setOnCheckedChangeListener((v,checked)->{try{File marker=new File(getFilesDir(),&quot;disable-wake-layer&quot;);if(checked)marker.delete();else marker.createNewFile();status.setText(&quot;Wake renderer saved. Disable, then enable wallpaper to apply.&quot;);}catch(Exception e){status.setText(e.toString());}});developer.addView(wake);"
+        errorLine2="                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="41"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" CheckBox wake=new CheckBox(this);wake.setText(&quot;Independent wake photo · apply on next enable&quot;);wake.setTextColor(-1);wake.setChecked(!new File(getFilesDir(),&quot;disable-wake-layer&quot;).exists());wake.setOnCheckedChangeListener((v,checked)->{try{File marker=new File(getFilesDir(),&quot;disable-wake-layer&quot;);if(checked)marker.delete();else marker.createNewFile();status.setText(&quot;Wake renderer saved. Disable, then enable wallpaper to apply.&quot;);}catch(Exception e){status.setText(e.toString());}});developer.addView(wake);"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="41"
+            column="368"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="   if(!photo.exists()||!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0){status.setText(&quot;Choose a photo and authorize Shizuku, then enable wallpaper.&quot;);return;}"
+        errorLine2="                                                                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="49"
+            column="96"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="  }catch(Exception e){connecting=false;status.setText(&quot;Could not start custom wallpaper: &quot;+e);}});"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="51"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="  }catch(Exception e){connecting=false;status.setText(&quot;Could not start custom wallpaper: &quot;+e);}});"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="51"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1=" final Runnable poll=new Runnable(){public void run(){try{if(UnlockTrace.capturing()||UnlockTrace.status().startsWith(&quot;Capture saved&quot;))status.setText(UnlockTrace.status());backgroundStatus.setText((WallpaperRestore.enabled(WallpaperActivity.this)?&quot;Enabled&quot;:&quot;Disabled&quot;)+&quot; · &quot;+WallpaperRestore.status+&quot;\n&quot;+UnlockTrace.status());}catch(Exception e){backgroundStatus.setText(&quot;Background status unavailable. Copy the background report for details.&quot;);}h.postDelayed(this,1000);}};"
+        errorLine2="                                                                                                                                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="64"
+            column="198"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" final Runnable poll=new Runnable(){public void run(){try{if(UnlockTrace.capturing()||UnlockTrace.status().startsWith(&quot;Capture saved&quot;))status.setText(UnlockTrace.status());backgroundStatus.setText((WallpaperRestore.enabled(WallpaperActivity.this)?&quot;Enabled&quot;:&quot;Disabled&quot;)+&quot; · &quot;+WallpaperRestore.status+&quot;\n&quot;+UnlockTrace.status());}catch(Exception e){backgroundStatus.setText(&quot;Background status unavailable. Copy the background report for details.&quot;);}h.postDelayed(this,1000);}};"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="64"
+            column="372"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1=" protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==2&amp;&amp;result==RESULT_OK&amp;&amp;data!=null){status.setText(&quot;Loading photo…&quot;);new Thread(()->{try{Bitmap b=ImageDecoder.decodeBitmap(ImageDecoder.createSource(getContentResolver(),data.getData()),(d,i,s)->{d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);int m=Math.max(i.getSize().getWidth(),i.getSize().getHeight());if(m>1600)d.setTargetSampleSize((m+1599)/1600);});File tmp=new File(getFilesDir(),&quot;photo-next.jpg&quot;);try(FileOutputStream out=new FileOutputStream(tmp)){if(!b.compress(Bitmap.CompressFormat.JPEG,90,out))throw new IOException(&quot;Photo encoding failed&quot;);}java.nio.file.Files.move(tmp.toPath(),photo.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE);b.recycle();runOnUiThread(()->{status.setText(&quot;Photo saved. If enabled, it updates automatically; otherwise tap Enable custom wallpaper.&quot;);refreshPreviews();});}catch(Exception e){runOnUiThread(()->status.setText(&quot;Photo failed: &quot;+e));}}).start();}}"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="65"
+            column="1044"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==2&amp;&amp;result==RESULT_OK&amp;&amp;data!=null){status.setText(&quot;Loading photo…&quot;);new Thread(()->{try{Bitmap b=ImageDecoder.decodeBitmap(ImageDecoder.createSource(getContentResolver(),data.getData()),(d,i,s)->{d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);int m=Math.max(i.getSize().getWidth(),i.getSize().getHeight());if(m>1600)d.setTargetSampleSize((m+1599)/1600);});File tmp=new File(getFilesDir(),&quot;photo-next.jpg&quot;);try(FileOutputStream out=new FileOutputStream(tmp)){if(!b.compress(Bitmap.CompressFormat.JPEG,90,out))throw new IOException(&quot;Photo encoding failed&quot;);}java.nio.file.Files.move(tmp.toPath(),photo.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE);b.recycle();runOnUiThread(()->{status.setText(&quot;Photo saved. If enabled, it updates automatically; otherwise tap Enable custom wallpaper.&quot;);refreshPreviews();});}catch(Exception e){runOnUiThread(()->status.setText(&quot;Photo failed: &quot;+e));}}).start();}}"
+        errorLine2="                                                                                                                                                                              ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="65"
+            column="175"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==2&amp;&amp;result==RESULT_OK&amp;&amp;data!=null){status.setText(&quot;Loading photo…&quot;);new Thread(()->{try{Bitmap b=ImageDecoder.decodeBitmap(ImageDecoder.createSource(getContentResolver(),data.getData()),(d,i,s)->{d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);int m=Math.max(i.getSize().getWidth(),i.getSize().getHeight());if(m>1600)d.setTargetSampleSize((m+1599)/1600);});File tmp=new File(getFilesDir(),&quot;photo-next.jpg&quot;);try(FileOutputStream out=new FileOutputStream(tmp)){if(!b.compress(Bitmap.CompressFormat.JPEG,90,out))throw new IOException(&quot;Photo encoding failed&quot;);}java.nio.file.Files.move(tmp.toPath(),photo.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE);b.recycle();runOnUiThread(()->{status.setText(&quot;Photo saved. If enabled, it updates automatically; otherwise tap Enable custom wallpaper.&quot;);refreshPreviews();});}catch(Exception e){runOnUiThread(()->status.setText(&quot;Photo failed: &quot;+e));}}).start();}}"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="65"
+            column="877"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1=" protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==2&amp;&amp;result==RESULT_OK&amp;&amp;data!=null){status.setText(&quot;Loading photo…&quot;);new Thread(()->{try{Bitmap b=ImageDecoder.decodeBitmap(ImageDecoder.createSource(getContentResolver(),data.getData()),(d,i,s)->{d.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);int m=Math.max(i.getSize().getWidth(),i.getSize().getHeight());if(m>1600)d.setTargetSampleSize((m+1599)/1600);});File tmp=new File(getFilesDir(),&quot;photo-next.jpg&quot;);try(FileOutputStream out=new FileOutputStream(tmp)){if(!b.compress(Bitmap.CompressFormat.JPEG,90,out))throw new IOException(&quot;Photo encoding failed&quot;);}java.nio.file.Files.move(tmp.toPath(),photo.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE);b.recycle();runOnUiThread(()->{status.setText(&quot;Photo saved. If enabled, it updates automatically; otherwise tap Enable custom wallpaper.&quot;);refreshPreviews();});}catch(Exception e){runOnUiThread(()->status.setText(&quot;Photo failed: &quot;+e));}}).start();}}"
+        errorLine2="                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/duofold/live/wallpaperlayer/WallpaperActivity.java"
+            line="65"
+            column="1044"/>
+    </issue>
+
+    <issue
+        id="RtlHardcoded"
+        message="Use &quot;`Gravity.START`&quot; instead of &quot;`Gravity.LEFT`&quot; to ensure correct behavior in right-to-left locales"
+        errorLine1="  p.gravity=Gravity.TOP|Gravity.LEFT;p.setTitle(&quot;Duo angle source&quot;);return p;"
+        errorLine2="                                ~~~~">
+        <location
+            file="src/main/java/org/duofold/live/LiveAngles.java"
+            line="129"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="RtlHardcoded"
+        message="Use &quot;`Gravity.START`&quot; instead of &quot;`Gravity.LEFT`&quot; to ensure correct behavior in right-to-left locales"
+        errorLine1="        lp.gravity=Gravity.TOP or Gravity.LEFT;lp.setFitInsetsTypes(0)"
+        errorLine2="                                          ~~~~">
+        <location
+            file="src/main/java/org/duofold/live/StandaloneService.kt"
+            line="113"
+            column="43"/>
+    </issue>
+
+</issues>

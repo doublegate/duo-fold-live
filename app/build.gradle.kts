@@ -19,6 +19,15 @@ android {
  buildFeatures { compose=true; buildConfig=true }
  compileOptions { sourceCompatibility=JavaVersion.VERSION_17; targetCompatibility=JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget="17" }
+ // Lint gate (CI runs lintRelease): existing findings live in lint-baseline.xml, so any NEW warning fails the
+ // build. Disabled: hidden-API reflection is this app's design (PrivateApi), and the version checks change
+ // verdicts whenever a dependency publishes a release, failing unchanged code (keep dependency bumps deliberate).
+ lint {
+  baseline = file("lint-baseline.xml")
+  warningsAsErrors = true
+  abortOnError = true
+  disable += setOf("PrivateApi", "DiscouragedPrivateApi", "GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
+ }
 }
 val wallpaperStubs by tasks.registering(JavaCompile::class) {
  source(rootProject.fileTree("wallpaper-stubs") { include("**/*.java") })
