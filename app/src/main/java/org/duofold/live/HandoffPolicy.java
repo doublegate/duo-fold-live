@@ -9,4 +9,6 @@ final class HandoffPolicy {
   return 0;
  }
  void reset(){cover=false;}
+ /** The system canceled our cover request: forget it so the next sample can request it again. */
+ void onCanceled(){reset();}
 }

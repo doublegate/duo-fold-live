@@ -111,7 +111,10 @@ public final class LiveAngles {
   if(anchor==null||!next.equals(anchorKey)){
    if(anchor!=null)try{wm.removeViewImmediate(anchor);}catch(Exception ignored){}
    Context c=context.createDisplayContext(primary).createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,null);
-   wm=c.getSystemService(WindowManager.class);anchor=new View(c);wm.addView(anchor,anchorParams());anchorKey=next;
+   // Not fatal (plan A3): this re-adds exactly when display 0 changes panels; a throw here used to fail() the
+   // reader mid-switch, tearing the service down while a display override was held. Retry next poll.
+   wm=c.getSystemService(WindowManager.class);View v=new View(c);
+   try{wm.addView(v,anchorParams());anchor=v;anchorKey=next;}catch(Exception e){anchor=null;RecoveryLog.add("Angle anchor unavailable: "+e.getClass().getSimpleName());return;}
    RecoveryLog.add("Angle anchor attached on primary "+next);
   }
   Display second=dualActive?dm.getDisplay(1):null;
@@ -136,7 +139,7 @@ public final class LiveAngles {
     p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("dual",false)?1:0);
     android.view.Display display=context.getSystemService(android.hardware.display.DisplayManager.class).getDisplay(0);
     android.view.Display.Mode mode=display.getMode();p.writeInt(Math.min(mode.getPhysicalWidth(),mode.getPhysicalHeight())/(float)Math.max(mode.getPhysicalWidth(),mode.getPhysicalHeight())>.7f?1:0);
-    StandaloneService host=StandaloneService.Companion.getInstance();p.writeInt(host!=null&&host.secondaryReady()?1:0);p.writeInt(HandoffFrames.readySource());p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f));p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true)?1:0);p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("enabled",false)?1:0);p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("closed_threshold",2f));p.writeLong(continuityRequest);p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("fade_smoothing_ms",FadeSettings.DEFAULT_SMOOTHING));p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("fade_gradualness",FadeSettings.DEFAULT_GRADUALNESS));p.writeString(context.getSharedPreferences("standalone",0).getString("animation_mode",AnimationModePolicy.DEFAULT));p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("debug_mode",false)?1:0);
+    StandaloneService host=StandaloneService.Companion.getInstance();p.writeInt(host!=null&&host.secondaryReady()?1:0);p.writeInt(HandoffFrames.readySource());p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f));p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true)?1:0);p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("enabled",false)?1:0);p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("closed_threshold",2f));p.writeLong(continuityRequest);p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("fade_smoothing_ms",FadeSettings.DEFAULT_SMOOTHING));p.writeFloat(context.getSharedPreferences("standalone",0).getFloat("fade_gradualness",FadeSettings.DEFAULT_GRADUALNESS));p.writeString(context.getSharedPreferences("standalone",0).getString("animation_mode",AnimationModePolicy.DEFAULT));p.writeInt(context.getSharedPreferences("standalone",0).getBoolean("debug_mode",false)?1:0);p.writeInt(context.getSystemService(PowerManager.class).isInteractive()?1:0);
    }
    if(!b.transact(code,p,r,0))throw new IllegalStateException("Unsupported reader");r.readException();return code==2?r.readBundle(getClass().getClassLoader()):null;
   }finally{p.recycle();r.recycle();}

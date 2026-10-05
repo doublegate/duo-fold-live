@@ -1,0 +1,106 @@
+# Fold 7 tuning reference
+
+Every value this fork changes for the Galaxy Z Fold 7 (SM-F966 family, detected by
+`DeviceCompatibility.isFold7`), every debug property it reads, and what each was measured against. Device:
+SM-F966U1, One UI 8.5, Android 16 (SDK 36); inner panel 1968x2184, cover 1080x2520, both 420 dpi. Every other
+model keeps the upstream value in the "Upstream" column. Values marked **all models** apply everywhere.
+
+## Version map
+
+| Version | Commit | What it carried |
+| --- | --- | --- |
+| 3.5.2-a16.1 | `99df23d` | Android 16 accepted on the Fold 7 family only. |
+| 3.5.2-a16.2 | `4789ef6` | Handoff black tuned to measured switch timing. |
+| 3.5.2-a16.3 | `900ce30` | Progressive preview blur, blurred handoff hold. |
+| 3.5.2-a16.4 | (device-only test build) | First full-panel unified prototype; skewed the right half and was replaced by the left-strip design in a16.5. No separate commit. |
+| 3.5.2-a16.5 | `4922d0b` | Unified left-strip glass, aligned reveals, orphaned-reader reaping, capture diagnostics. |
+| 3.5.2-a16.6 | (device-only test build) | CloseReleaseGate, readiness fixes, precapture removal; committed as part of a16.7. |
+| 3.5.2-a16.7 | `8a39812` | Gated close, glass frame retention, RightHalfBlur, adaptive polling, stall fixes, `fold7test`. |
+| 3.5.2-a16.8 | Phase A | Every override release gated (mode, teardown, dual, probe, cancel, direct inner). |
+
+## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
+
+| Value | Fold 7 | Upstream | Source | Why |
+| --- | --- | --- | --- | --- |
+| Full-black angle, closing / opening | 94 / 101 deg | 94 / 98 deg | `blackAnglesFor` | Measured switch at 92-94 deg closing, 101-102 deg opening (wallpaper angle log vs DisplayManager). |
+| Reveal cap, no-glass path | ON+40 ms | ON+900 ms | `readyTimeoutFor` | Duo draws only on new angles; the wallpaper sends none for 0.3-0.5 s after a switch. |
+| Reveal cap, opening (unified) | ON+600 ms | ON+900 ms | `openingReadyTimeoutFor` | First inner glass frame commits 300-450 ms after the switch; revealing earlier exposed the mirrored hold. |
+| Reveal cap, closing (unified) | ON+300 ms | ON+900 ms | `closingReadyTimeoutFor` | The cover draws faster than the inner panel. |
+| Fresh-content window | 700 ms | 350 ms | `freshWindowFor` | The first post-switch capture alone takes up to ~400 ms. |
+| Reveal length at 0 % gradualness | 100 ms | 180 ms | `revealBaseFor` | Reads as a short blink rather than a fade. |
+| Re-check cadence during a switch | 16 ms | 80 ms | `tickDelayMs` | VSYNC can stop while a panel is OFF. |
+| Idle re-check cadence (**all models**) | 50 ms | per vsync | `IDLE_TICK_MS` | Nothing fades; a new angle wakes the tick at once. |
+| Keyguard check (**all models**) | every 200 ms | every frame | `HandoffFade` | Binder call; locking takes far longer. |
+| Cover glass required for the closing reveal | yes (unified) | no | `coverGlass` | Otherwise the reveal landed on the dark capture fallback. |
+
+## Glass frames (`GlassFramePolicy`, `GlassFrames`, `DuoGlass`)
+
+| Value | Fold 7 | Upstream | Why |
+| --- | --- | --- | --- |
+| Render age limit for a glass frame | 1500 ms | 350 ms | Kept frames must stay renderable after a failed capture. |
+| Keep last frame on a failed capture | up to 1500 ms, retry in 32 ms | cleared at once | "Panel changed during capture" (4->3 step), screen-off and 250 ms timeouts dropped good frames; ~21 visible empty frames per run before, 0 after. |
+| Cover readiness re-report window (**all models**) | 1.5 s after the surface appears | once | A single report could be missed, holding black to the cap. |
+| Closed cover counts as a reveal endpoint (**all models**) | yes | no | The native closed cover is the destination. |
+
+## Unified renderer (`UnifiedRenderer`, `UnifiedTuning`, `DuoGlass`, `SecondaryShade`)
+
+| Value | Fold 7 | Upstream | Why |
+| --- | --- | --- | --- |
+| Unified mode | on | off | The glass shader draws the inner left strip before the switch, so perspective corners, blur and timing are continuous. |
+| Left-strip perspective profile | inner profile (early/end stretch, vertical compression, startup easing) | cover profile | Matches the post-switch leaf; the inner sliders tune both sides. |
+| Reflection maximum hinge | 55 deg | — | The reflection folded edge-on and collapsed ~0.6 s before the switch. |
+| Glass edge darkening cap | 0.55 | 1.0 | Blacked the panel out around 104-114 deg while closing. |
+| Mirrored-hold fade at reveal | 0 ms when ready, else 120 ms | 120 ms | Removed a double exposure at the cut-over. |
+
+## Inner right half: preview mirror and blur (`InnerLiveMirror`, `PreviewBlurPolicy`, `RightHalfBlur`)
+
+| Value | Fold 7 | Why |
+| --- | --- | --- |
+| Preview mirror blur, opening (before the switch) | smoothstep 0 px at 0 deg to 56 px at 101 deg, glide time constant 40 ms, 8 ms ticks while moving | The full-resolution compositor mirror stayed sharp, then jumped to the blurred glass. |
+| Right-half blur after the switch | 56 px at 101 deg, smoothstep to 0 at the open threshold (172 deg); 0 at once when the cover is primary or the panel is rotated | The glass shader leaves the inner right half transparent, exposing the sharp native screen; the blur jumped 56 px -> 0 across the black. |
+
+## Display overrides (`CloseReleaseGate`, `CoverHandoff`, `ConcurrentController`, `BaseDeviceState`) — all models
+
+| Value | Setting | Why |
+| --- | --- | --- |
+| Release condition for a held override | base state CLOSED, or reopening >= 98 deg, or display off, or 3 s | 5->2->0 is a sleep transition on Samsung (`sleepDevice=true`), blanking the cover. |
+| "Display off" input | `PowerManager.isInteractive()` only | Locked / service restarting / disabled do not make the sleep harmless. |
+| Teardown wait | up to 3 s for CLOSED | Reader stop, Shizuku destroy and restart cancel the override. |
+| Base-state query rate | at most every 16 ms, after the cheap escapes | Runs on the 4 ms poll under the reader lock during a defer. |
+| Closing-mirror mask bound | 1.8 s after the secondary panel is gone | It stayed active for as long as the phone was closed. |
+
+## Angle polling (`PollCadence`, `LiveAngles`) — all models
+
+| Value | Setting | Why |
+| --- | --- | --- |
+| Poll period | 4 ms while the angle changed in the last 400 ms or sits in the 80-115 deg band; 33 ms otherwise; 500 ms with the screen off | The wallpaper reports every 30-130 ms in 2-3 deg steps; 4 ms polling when still bought nothing. |
+| Secondary-panel refresh | 8 ms moving, 100 ms still | Each refresh makes several Binder calls on the main thread. |
+| Mirror attach IPC | own thread on both sides | The attach waits up to 250 ms for its commit and stalled the angle poll mid-transition. |
+
+## Debug properties
+
+Shell-writable (`adb shell setprop <name> <value>`); no rebuild needed. Read where noted.
+
+| Property | Default | Read | Effect |
+| --- | --- | --- | --- |
+| `debug.duofold.unified` | on (Fold 7), off elsewhere | per decision | `1`/`0` forces the unified renderer on or off. |
+| `debug.duofold.reflect_max_hinge` | 55 | cached 1 s | Maximum hinge angle used for the left-strip reflection. |
+| `debug.duofold.max_darken` | 0.55 | cached 1 s | Glass edge darkening cap in unified mode. |
+| `debug.duofold.preview_blur_start` | 0 | per mirror attach | Angle where the preview mirror blur starts. |
+| `debug.duofold.preview_blur_max` | 56 | per attach / prepare; right half once per fade session | Maximum preview and right-half blur radius in px. |
+| `debug.duofold.preview_blur_smooth_ms` | 40 | per mirror attach | Glide time constant of the preview mirror blur. |
+| `debug.duofold.right_blur_clear` | open threshold (172) | once per fade session | Angle where the right half is sharp again after the switch. |
+| `debug.duofold.record_visible` | 0 | cached 1 s, applied live | `1` keeps Duo's overlay layers visible to screen recordings (fade, hold, blur, mirror blur); Duo's main glass stays skipped because skip-screenshot is also its mirror exclusion. |
+
+Read-once properties and mismatched read times are plan item B10.
+
+## Build types
+
+| Type | Optimized | Debuggable | Signing | Diagnostic logs |
+| --- | --- | --- | --- | --- |
+| `debug` | no | yes | debug key | yes |
+| `release` | yes | no | release key from `DUO_KEYSTORE` env, else unsigned | no |
+| `fold7test` | yes (`initWith(release)`) | no | debug key, installs over debug | yes |
+
+Diagnostic log tags (`BuildConfig.DIAGNOSTICS`): `DuoHandoff`, `DuoReady`, `DuoState`, `DuoBlur`, `DuoMirror`,
+`DuoFallback`, `DuoHold`.

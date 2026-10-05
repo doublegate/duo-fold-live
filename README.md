@@ -16,7 +16,7 @@ An iPhone Duo-inspired folding animation for the **Samsung Galaxy Z Fold 8**, wi
 
 **Only tested on the Z Fold 8 (SM-F971U).** Fold 8 Ultra, Fold 7, and other devices are unverified. Do not expect compatibility. Model recognition includes regional SM-F971, SM-F976, and SM-F966 families. Unknown models display a warning and may proceed. Android 17 and the existing Samsung wallpaper/API checks are still required. Recognition is not verified compatibility.
 
-> **This fork (`feat/android16-fold7`)** also accepts Android 16 on the SM-F966 / Fold 7 family, and only there. It is experimental. Since 3.5.2-a16.2 it has been installed and tuned on an SM-F966U1 (One UI 8.5) against frame-by-frame recordings of both panels; see `CHANGELOG.md` for each step and `docs/fold7/remediation-plan-2026-10-04.md` for the open work.
+> **This fork (`feat/android16-fold7`)** also accepts Android 16 on the SM-F966 / Fold 7 family, and only there. It is experimental. Since 3.5.2-a16.2 it has been installed and tuned on an SM-F966U1 (One UI 8.5) against frame-by-frame recordings of both panels; see `CHANGELOG.md` for each step, `docs/fold7/tuning-reference.md` for every Fold 7 value and debug property, and `docs/fold7/remediation-plan-2026-10-04.md` for the open work.
 
 ## Updating from an older version
 

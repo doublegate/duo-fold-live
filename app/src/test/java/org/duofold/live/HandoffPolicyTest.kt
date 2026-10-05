@@ -6,4 +6,6 @@ class HandoffPolicyTest {
  @Test fun partialStartWorks(){assertEquals(1,HandoffPolicy().update(45f,true,true))}
  @Test fun directionAndJitter(){val p=HandoffPolicy();assertEquals(0,p.update(180f,true,true));assertEquals(0,p.update(95f,true,true));assertEquals(1,p.update(94f,true,true));for(a in listOf(93f,95f,97f))assertEquals(0,p.update(a,true,true));assertEquals(-1,p.update(98f,true,true));assertEquals(1,p.update(94f,true,true))}
  @Test fun closedAndStaleRelease(){for(end in listOf(0f,45f)){val p=HandoffPolicy();p.update(45f,true,true);assertEquals(-1,p.update(end,end==0f,true));assertEquals(1,p.update(3f,true,true))}}
+ // Plan A4: after a system cancel of the cover request the policy must request again on the next sample.
+ @Test fun systemCancelAllowsReRequest(){val p=HandoffPolicy();assertEquals(1,p.update(45f,true,true));p.onCanceled();assertEquals(1,p.update(44f,true,true))}
 }

@@ -1,3 +1,36 @@
+## 3.5.2-a16.8 — Every display-override release waits for the hinge to report closed (fork, Phase A)
+
+Plan Phase A (`docs/fold7/remediation-plan-2026-10-04.md`, items A1-A8). Releasing a concurrent display override
+(state 5 cover / 4 inner) while the base device state is still HALF_OPENED goes 5->2->0 or 4->2->0, and Samsung
+treats 2->0 as `sleepDevice=true` (the cover blanks). a16.7 gated the main closing path; this closes the rest.
+Verified by unit tests only (on-device verification follows the full plan).
+
+- **All models:** Fold-Only / Unfold-Only mode changes no longer cancel a held cover override outright. Fold-Only
+  turns the effect off at the closed endpoint and on any 2 deg reversal, which released at base HALF_OPENED on
+  every Fold-Only close; the release is now deferred by `CloseReleaseGate` like any other (A1).
+- **All models:** the gate's "nothing to blank" escape uses the display power state only. It used the "service
+  running, enabled, screen on and unlocked" flag, so a keyguard lock, service restart or disabling Duo mid-close
+  released with the screen on. The angle poll now sends `PowerManager.isInteractive()` separately (A2).
+- **All models:** reader teardown (2.5 s lease expiry, Shizuku destroy, restart) waits up to 3 s for CLOSED before
+  cancelling a held cover override; the primary angle-anchor `addView` (re-run exactly when display 0 changes
+  panels) no longer fails the whole reader when it throws (A3).
+- **All models:** a system cancel of the cover request resets the hold policy, so it is requested again on the next
+  sample instead of never for the rest of that close (A4).
+- **All models (direct mode):** an inner (4) hold that reaches closed without a sample at or below 94 deg hands over
+  to the cover hold, whose release is gated, instead of releasing 4 at base HALF_OPENED (A5).
+- **All models (dual mode):** the outer (5) session's endpoint, stale-angle and locked releases are gated (A6).
+- **All models:** the continuity probe's FINISH release is gated (A7).
+- **All models:** the closing-mirror black mask deactivates 1.8 s after the secondary panel is gone; it stayed
+  active for as long as the phone was closed, keeping the fade engine ticking per vsync and starting the next
+  opening black-masked (A8).
+- `BaseDeviceState`: the base-state query resolves its reflection once and calls system_server at most every
+  16 ms, after the cheap escapes (reopening, screen off, cap); it ran on every 4 ms poll during a defer (C3).
+- Docs: `docs/fold7/tuning-reference.md` collects every Fold 7 value, debug property and build type introduced since
+  a16.1 with its measurement, plus a version map (a16.4 and a16.6 were device-only test builds whose changes are in
+  the a16.5 and a16.7 commits).
+- Tests: CloseReleaseGate (Fold-Only endpoint, locked-screen-on, bounded teardown, dual outer), HandoffPolicy
+  re-request after cancel, DirectHandoffPolicy inner hand-over, ClosingMirrorFadePolicy bound; 273 pass.
+
 ## 3.5.2-a16.7 — Close without the cover blackout, steadier glass, right-half blur continuity, lighter hot paths (fork, checkpoint)
 
 Covers a16.6 and a16.7. Developed against four 120 s captures of both panels on an SM-F966U1 / One UI 8.5 and a

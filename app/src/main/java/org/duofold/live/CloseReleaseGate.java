@@ -12,6 +12,17 @@ final class CloseReleaseGate {
  static boolean allow(boolean baseClosed,boolean interactive,boolean reopening,long deferredMs){
   return baseClosed||reopening||!interactive||deferredMs>=MAX_DEFER_MS;
  }
+ /**
+  * True = keep a held override for now. {@code screenOn} is the display power state only: "locked",
+  * "service restarting" or "effect disabled" do not make the 2->0 sleep transition harmless.
+  */
+ static boolean defer(boolean held,boolean baseClosed,boolean screenOn,boolean reopening,long deferredMs){
+  return held&&!allow(baseClosed,screenOn,reopening,deferredMs);
+ }
+ /** Teardown (reader stop, Shizuku destroy, restart): wait, bounded, for CLOSED before cancelling. */
+ static boolean waitBeforeTeardown(boolean held,boolean baseClosed,boolean screenOn,long elapsedMs){
+  return held&&!baseClosed&&screenOn&&elapsedMs<MAX_DEFER_MS;
+ }
  /** Whether a DirectHandoffPolicy action releases the cover override, and so must pass allow() first. */
  static boolean gates(int directAction,boolean innerHeld){
   return directAction==DirectHandoffPolicy.RELEASE&&!innerHeld;

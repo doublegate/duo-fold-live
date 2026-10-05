@@ -13,6 +13,18 @@ CONCURRENT_INNER 4, CONCURRENT_OUTER 5. Releasing a concurrent override while th
 HALF_OPENED goes 5->2->0 (or 4->2->0), and Samsung treats 2->0 as `sleepDevice=true`: the cover blanks.
 Effective angle maps <= 2 deg to 0, which fires 9-103 ms before the base state reports CLOSED.
 
+## Progress
+
+| Phase | Version | Status | Notes |
+| --- | --- | --- | --- |
+| Tooling | — | Done | Lint baseline + warnings-as-errors, `.editorconfig`, markdownlint, ruff (commit `chore(tooling)`). |
+| A | 3.5.2-a16.8 | Done | A1-A8 implemented test-first; C3 (cached, rate-limited base-state query) landed with it. A3: the client still unbinds with `remove=true`; the service-side bounded teardown wait covers the destroy it triggers. |
+| B | — | Planned | |
+| C | — | Planned | C3 done in Phase A. |
+| D | — | Planned | |
+| E | — | Planned | E1, E2, E6 done with the plan itself. |
+| F | — | Planned | |
+
 ## Results that motivated this plan
 
 | Capture | Sleep-path closes | Gate defers | Visible empty glass frames | Median black (log) |

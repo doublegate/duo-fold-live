@@ -29,4 +29,33 @@ public class CloseReleaseGateTest {
   assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.HOLD,false));
   assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.INNER,false));
  }
+ // Plan A1: Fold-Only turns effectAllowed false at the closed endpoint (direction flips at <= 2 deg); the
+ // resulting release of a held cover override must be deferred like any other.
+ @Test public void foldOnlyCloseDefersTheDisallowedRelease(){
+  AnimationModePolicy mode=new AnimationModePolicy();
+  mode.update("fold_only",179,true);assertTrue(mode.update("fold_only",60,true));
+  assertFalse(mode.update("fold_only",0,true));                       // effect disallowed at the endpoint
+  assertTrue(CloseReleaseGate.defer(true,false,true,false,0));          // held, base HALF_OPENED, screen on
+  assertFalse(CloseReleaseGate.defer(true,true,true,false,0));          // base CLOSED: release now
+  assertFalse(CloseReleaseGate.defer(false,false,true,false,0));        // nothing held: nothing to defer
+ }
+ // Plan A2: the escape is "screen off", not "locked / service missing / disabled".
+ @Test public void lockedScreenOnStillDefers(){
+  assertTrue(CloseReleaseGate.defer(true,false,true,false,0));
+  assertFalse(CloseReleaseGate.defer(true,false,false,false,0));        // genuinely off: nothing to blank
+ }
+ // Plan A3: teardown waits (bounded) for CLOSED before cancelling a held cover override.
+ @Test public void teardownWaitsForClosedBounded(){
+  assertTrue(CloseReleaseGate.waitBeforeTeardown(true,false,true,0));
+  assertTrue(CloseReleaseGate.waitBeforeTeardown(true,false,true,CloseReleaseGate.MAX_DEFER_MS-1));
+  assertFalse(CloseReleaseGate.waitBeforeTeardown(true,false,true,CloseReleaseGate.MAX_DEFER_MS));
+  assertFalse(CloseReleaseGate.waitBeforeTeardown(true,true,true,0));
+  assertFalse(CloseReleaseGate.waitBeforeTeardown(true,false,false,0));
+  assertFalse(CloseReleaseGate.waitBeforeTeardown(false,false,true,0));
+ }
+ // Plan A6: dual mode's outer (cover) session is the same override; endpoint/stale releases are gated.
+ @Test public void dualOuterSessionReleaseIsGated(){
+  assertTrue(CloseReleaseGate.defer(true,false,true,false,400));        // 350 ms endpoint timer no longer enough
+  assertFalse(CloseReleaseGate.defer(true,false,true,true,0));          // reopening past 98 deg
+ }
 }
