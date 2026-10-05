@@ -7,6 +7,10 @@ import java.util.concurrent.Executor;
 final class CoverHandoff {
  private Object manager,owned; private Method cancel,request; private Class<?> requestType,callbackType;
  private int coverId=-1,innerId=-1; private boolean innerHeld=false; private final HandoffPolicy policy=new HandoffPolicy();
+ private final ReleaseDeferral deferral=new ReleaseDeferral();
+ // Display power only (CloseReleaseGate input); "unlocked" still decides whether to request at all.
+ private volatile boolean screenOn=true;
+ void screen(boolean on){screenOn=on;}
  private final NativeContinuityProbe nativeProbe=new NativeContinuityProbe();
  synchronized boolean probeNative(){return nativeProbe.nativeVisible();}
  private final ContinuityProbePolicy probe=new ContinuityProbePolicy();
@@ -31,17 +35,19 @@ final class CoverHandoff {
   int test=probe.update(SystemClock.elapsedRealtime(),probeRequest,angle,fresh,interactive&&direct,owned!=null&&!innerHeld);
   nativeProbe.update(test==ContinuityProbePolicy.HOLD,angle,interactive);
   if(test==ContinuityProbePolicy.HOLD)return;
-  if(test==ContinuityProbePolicy.FINISH){releaseOwned();return;}
+  if(test==ContinuityProbePolicy.FINISH){if(gatedRelease(angle,fresh))return;releaseOwned();return;}
   if(owned!=null){
    int next=DirectHandoffPolicy.next(innerHeld,angle,fresh,interactive,direct,openThreshold);
-   if(next==DirectHandoffPolicy.RELEASE){releaseOwned();return;}
+   if(next==DirectHandoffPolicy.RELEASE){if(CloseReleaseGate.gates(next,innerHeld)&&gatedRelease(angle,fresh))return;releaseOwned();return;}
    if(next==DirectHandoffPolicy.INNER){changeState(true);policy.reset();return;}
    if(next==DirectHandoffPolicy.COVER){changeState(false);policy.cover=owned!=null;return;}
    if(innerHeld)return;
   }
-  if(!fresh||!interactive){releaseOwned();return;}
+  if(!fresh||!interactive){if(gatedRelease(angle,fresh))return;releaseOwned();return;}
   int action=policy.update(angle,fresh,interactive);
-  if(action<0){releaseOwned();return;}if(action!=1)return;
+  if(action<0){if(gatedRelease(angle,fresh)){policy.cover=true;return;}releaseOwned();return;}
+  deferral.reset();
+  if(action!=1)return;
   changeState(false);
  }
  private void changeState(boolean toInner){
@@ -60,12 +66,32 @@ final class CoverHandoff {
     if(m.getName().equals("hashCode"))return System.identityHashCode(proxy);
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
-    if(m.getName().equals("onRequestCanceled")){synchronized(this){if(owned==next){owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
+    if(m.getName().equals("onRequestCanceled")){synchronized(this){if(owned==next){owned=null;innerHeld=false;policy.onCanceled();deferral.reset();status="Concurrent handoff request canceled by system";}}}return null;
    });
    owned=next;innerHeld=toInner;request.invoke(manager,next,(Executor)Runnable::run,callback);
    status=toInner?"Direct concurrent handoff: inner primary; holding until fully open":"Cover held below handoff; switch at 98° or closed";
   }catch(Exception e){owned=previous;innerHeld=previousInner;releaseOwned();Throwable root=e;while(root.getCause()!=null)root=root.getCause();status="Handoff unavailable: "+root.getClass().getSimpleName()+": "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(identity);}
+ }
+ /** True = keep the cover override for now (CloseReleaseGate). Only applies to the cover override. */
+ private boolean gatedRelease(float angle,boolean fresh){
+  if(owned==null||innerHeld)return false;
+  boolean reopening=fresh&&Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
+  // Cheap escapes first inside ReleaseDeferral: the base-state query is a system_server call on the poll.
+  return deferral.keep(SystemClock.elapsedRealtime(),true,screenOn,reopening,BaseDeviceState::closed);
+ }
+ /** External release (effect disallowed by the animation mode, dual mode toggled): gated like every other release. */
+ synchronized void releaseGated(float angle,boolean fresh){
+  if(gatedRelease(angle,fresh))return;
+  release();
+ }
+ /** Reader stop / Shizuku destroy / restart: wait, bounded, for CLOSED before cancelling. */
+ synchronized void releaseForTeardown(){
+  long start=SystemClock.elapsedRealtime();
+  while(CloseReleaseGate.waitBeforeTeardown(owned!=null&&!innerHeld,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
+   try{Thread.sleep(BaseDeviceState.CACHE_MS);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}
+  }
+  release();
  }
  synchronized boolean active(){return owned!=null && !innerHeld;}
  synchronized void release(){probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
