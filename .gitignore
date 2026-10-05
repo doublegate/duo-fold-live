@@ -15,3 +15,8 @@ signing/
 captures/
 
 .kotlin/
+
+# Device captures (Fold 7 transition recordings and screenshots are large and may show personal screens)
+*.mp4
+shots/
+transitions/

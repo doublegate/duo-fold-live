@@ -1,3 +1,61 @@
+## 3.5.2-a16.7 — Close without the cover blackout, steadier glass, right-half blur continuity, lighter hot paths (fork, checkpoint)
+
+Covers a16.6 and a16.7. Developed against four 120 s captures of both panels on an SM-F966U1 / One UI 8.5 and a
+full code audit; open findings are tracked in `docs/fold7/remediation-plan-2026-10-04.md`. Fold 7 only unless
+marked **all models**.
+
+Closing and the black cover screen
+
+- **All models:** `CloseReleaseGate` holds the cover-concurrent override (state 5) until the base device state is
+  CLOSED. Releasing it while the hinge still reports HALF_OPENED went 5->2->0, and Samsung treats 2->0 as
+  `sleepDevice=true`, which blanked the cover. The hold is bounded at 3 s and lifts at once on reopening (>= 98 deg)
+  or with the screen off. The angle <= 0 RELEASE in `DirectHandoffPolicy` now passes the gate too; it was the path
+  of the last remaining blackout. Measured: 5 sleep-path closes per run before, 1 in 8 after a16.6, 0 in 10 after
+  a16.7. Known remaining ungated paths (Fold-Only mode, keyguard/teardown, dual mode) are plan Phase A.
+
+Reveal timing and glass frames
+
+- The cover re-reports readiness for 1.5 s after its surface appears (a once-only report could be missed, holding
+  black to the cap), and a fully closed cover counts as ready. Closing reveal cap ON+600 -> ON+300 ms.
+- Fresh-content window 700 ms on the Fold 7 (upstream 350 ms stays elsewhere): the first post-switch capture alone
+  takes up to ~400 ms there, so good frames were being rejected.
+- A failed capture keeps the last good same-panel frame for up to 1.5 s and retries in 32 ms instead of dropping
+  the glass to its empty fallback ("Panel changed during capture" on the 4->3 state step, screen-off, 250 ms
+  timeouts). Rendered glass may be up to 1.5 s old on the Fold 7; panel switches still clear frames explicitly.
+  Measured: ~21 visible empty frames per run before, 0 after.
+- Removed the switch-time precapture and warm start from a16.5 (`GlassFrames.precapture()`, `WarmStart`, the
+  switch-time publication; `GlassCapture` again requires an exclusion list). They produced frames from the wrong
+  moment and could deadlock the first capture.
+- Upstream readiness test invariants are preserved through per-device constants.
+
+Right half: blur continuity
+
+- `RightHalfBlur`: while the inner panel is primary, a compositor blur over its right half continues the opening
+  mirror's blur from 56 px at the switch angle down to 0 at fully open (172 deg). Before, the right half went from
+  the mirror at 56 px to the sharp native screen across the black. Closing ramps it back up. Clear angle tunable:
+  `adb shell setprop debug.duofold.right_blur_clear <deg>`.
+
+Performance and stalls
+
+- **All models:** angle polling 4 ms while the hinge moves or near the switch angles, 33 ms when still (was 4 ms
+  always); secondary-panel refresh 8 ms moving / 100 ms still.
+- Mirror attach (waits up to 250 ms for its commit) runs outside the angle reader's lock and on its own IPC thread
+  on both sides, so the 4 ms poll that drives the fade and cover hold no longer stalls mid-transition.
+- The wallpaper angle command (a synchronous window-manager call) moved off the app's main thread.
+- The fade engine no longer runs per vsync while nothing fades, and checks the keyguard every 200 ms, not per frame.
+- Preview blur ticker idles once settled and releases its layer on its own thread (no radius on a released layer).
+- Angle parser compiles its pattern once (about 640 wallpaper lines/s reach it while polling).
+
+Diagnostics
+
+- `fold7test` build type: release-optimized, not debuggable, debug-signed (installs over debug builds), diagnostic
+  logs on. `BuildConfig.DIAGNOSTICS` replaces `BuildConfig.DEBUG` for every diagnostic log.
+- Duo's main glass surface is always skipped from screenshots: skip-screenshot is also what keeps it out of the
+  live cover->inner mirror, and un-skipping it under `debug.duofold.record_visible=1` mirrored the cover's
+  perspective glass onto the inner right half during captures. Captures now show the native screen where the main
+  glass is drawn (plan item B1).
+- New logs: `DuoState` gate defers, `DuoReady` "frame kept".
+
 ## 3.5.2-a16.5 — Unified left-strip glass, aligned reveals, faster post-switch frames (fork, checkpoint)
 
 Developed against frame-by-frame recordings of both panels (see the fork's Fold 7 project tooling). Fold 7 only unless noted; every other model keeps upstream behaviour.
