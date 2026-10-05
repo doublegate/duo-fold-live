@@ -23,6 +23,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | 3.5.2-a16.12 | Phase E | Shared hysteresis constants and defer timer, endpoint freshness, tests. |
 | 3.5.2-a16.13 | Phase F | Closing cap 380 ms, diagnostics cadence; plan complete. |
 | 3.5.2-a16.14 | Follow-up | Adaptive glass capture rate (10 fps once the hinge is still). |
+| 3.5.2-a16.15 | Upstream alphas | Helper recovery, non-blocking preview release gate, closed-hinge hysteresis. |
 
 ## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
 
@@ -74,6 +75,8 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | Release condition for a held override | base state CLOSED, or reopening >= 98 deg, or display off, or 3 s | 5->2->0 is a sleep transition on Samsung (`sleepDevice=true`), blanking the cover. |
 | "Display off" input | `PowerManager.isInteractive()` only | Locked / service restarting / disabled do not make the sleep harmless. |
 | Teardown wait | up to 3 s for CLOSED | Reader stop, Shizuku destroy and restart cancel the override. |
+| Closed-hinge hysteresis (setting, default on) | effective angle opens at closed threshold + 2 deg, closes at the threshold | A still, closed phone reading 3 deg started a cover preview (upstream alpha.20). |
+| Preview release gate | cover release waits for the hold commit, at most 80 ms, never blocking the poll | Upstream alpha.15; replaced a 24 ms blocking wait. |
 | Base-state query rate | at most every 16 ms, after the cheap escapes | Runs on the 4 ms poll under the reader lock during a defer. |
 | Closing-mirror mask bound | 1.8 s after the secondary panel is gone | It stayed active for as long as the phone was closed. |
 

@@ -132,6 +132,7 @@ centre line at every angle, flat right half, matching blur on both sides of each
 | --- | --- |
 | Shorter post-switch black | Not achievable from the app: the destination's windows are first painted by Android's display-switch transition ~300 ms after the switch, and the first capture completes just after it. A 500 ms post-switch capture timeout was tried and reverted (opening black rose). |
 | Left half black at 3-6 deg opening | Open. A warm cover frame while closed plus a pre-created strip still showed it in 2 of 7 samples; withdrawn. Suspected cause: the warm-capture trigger is evaluated at composition from non-Compose state, so it may never start. Next step: log whether it runs, fix the trigger, re-capture. |
+| Upstream alpha survey | Done in a16.15: helper recovery (alpha.19), non-blocking preview release gate (alpha.15), closed-hinge hysteresis (alpha.20). Skipped with reasons in the survey: screenshot/Live Screen modes and endpoint holds (parked upstream), Samsung power experiments (the release gate fixes the root cause), per-build settings reset (wipes user tuning). |
 | Idle CPU | Done in a16.14: adaptive glass capture rate; Flex at rest 43 % -> 20 % of a core, closed 13.4 % -> 7.4 %. |
 
 ## Order of work and verification

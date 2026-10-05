@@ -1,3 +1,24 @@
+## 3.5.2-a16.15 — Upstream 3.5.3 alpha improvements: helper recovery, preview release gate, closed-hinge hysteresis (fork)
+
+Ported from the upstream 3.5.3 alpha line (joeconsorti/duo-fold-live) after surveying every branch off `main`.
+**All models.** Verified by unit tests only.
+
+- Helper recovery after Shizuku restarts (upstream alpha.19): each Shizuku UserService bind is one attempt
+  (`HelperAttempt`, `HelperBinding`) with a 35 s callback timeout (the server allows 30 s), late and duplicate
+  callbacks ignored, and the local callback detached before the remote cleanup. Shizuku binder death or arrival now
+  resets every helper (angle reader, wallpaper restore, keep-awake, inner decor) instead of only clearing the effect;
+  `FoldBackgroundService.reconnectHelpers` and a "Reconnect helpers" button force it, and the status report shows
+  per-helper connection stages. Previously a Shizuku restart could leave Duo disconnected until the app was reopened.
+- Non-blocking preview release gate (upstream alpha.15): the pre-release hold no longer waits up to 24 ms on the
+  angle poll. `PreviewReleaseGate` is request-local (committed, timed out after 80 ms, or skipped); the cover hold is
+  not released until it allows, and a reversal, staleness, disable or lock cancels the wait. Cleanup no longer counts
+  as a commit, and a late callback cannot acknowledge a newer request.
+- Closed-hinge hysteresis (upstream alpha.20, default on, "Closed-hinge jitter protection" setting): the effective
+  angle opens only at closed + 2 deg and closes at the closed threshold, applied once before rendering, preview,
+  rotation, fade and display requests; a still, closed phone reading 3 deg no longer starts a cover preview. Sent as a
+  trailing field after the screen-on flag in the angle poll (older clients omit it).
+- Tests: `PreviewReleaseGateTest`, `ClosedHingeGateTest`, `HelperAttemptTest` (from upstream).
+
 ## 3.5.2-a16.14 — Glass content capture slows down at rest (fork, post-plan follow-up)
 
 Measured on the device (SM-F966U1) with a per-process CPU sampler, 60 s per posture, phone still, screen on.

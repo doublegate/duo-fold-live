@@ -81,6 +81,7 @@ class MainActivity:ComponentActivity(){
     var seamOffset by remember{mutableFloatStateOf(RenderQuality.seam(prefs.getFloat("seam_offset",.07f)))}
     var intensity by remember{mutableFloatStateOf(prefs.getFloat("intensity",1f))}
     var closedThreshold by remember{mutableFloatStateOf(FoldThreshold.sanitizeClosed(prefs.getFloat("closed_threshold",2f)))}
+    var jitterProtection by remember{mutableStateOf(prefs.getBoolean("closed_hinge_jitter_protection",true))}
     var threshold by remember{mutableFloatStateOf(FoldThreshold.sanitize(prefs.getFloat("open_threshold",172f)))}
     var status by remember{mutableStateOf("Connecting…")}
     var photo by remember{mutableStateOf(BitmapFactory.decodeFile(WallpaperFiles.photoFile(this).absolutePath))}
@@ -113,6 +114,12 @@ class MainActivity:ComponentActivity(){
         Text("Move the hinge with the phone unlocked. If this remains, repair the required wallpaper setup. A custom photo alone does not provide angles.")
         Button(onClick={startActivity(Intent(this@MainActivity,SetupActivity::class.java).putExtra("repair",true))}){Text("Repair wallpaper & check permissions")}
         OutlinedButton(onClick={ShizukuAccess.show(this@MainActivity,ShizukuAccess.report(this@MainActivity))}){Text("Connection report")}
+       }
+      }
+      if(enabled && (status.contains("helper",ignoreCase=true)||status.contains("timed out",ignoreCase=true)) && !LiveAngles.fresh()){
+       SettingsCard("Animation is waiting for a helper","Shizuku can be running while Duo’s helper is still disconnected."){
+        Button(onClick={FoldBackgroundService.reconnectHelpers(this@MainActivity)}){Text("Reconnect helpers")}
+        Text("Allow up to 35 seconds. If the helpers still time out, stop and start Shizuku, then return here.",style=MaterialTheme.typography.bodySmall)
        }
       }
       DeviceProfileChoice{startActivity(Intent(this@MainActivity,SetupActivity::class.java).putExtra("repair",true))}
@@ -172,7 +179,7 @@ class MainActivity:ComponentActivity(){
         OutlinedButton(onClick={ShizukuAccess.show(this@MainActivity,ShizukuAccess.report(this@MainActivity))}){Text("Connection report")}
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))}){Text("Allow overlays")}
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}){Text("Enable accessibility")}
-        OutlinedButton(onClick={restart()}){Text("Reconnect animation")}
+        OutlinedButton(onClick={FoldBackgroundService.reconnectHelpers(this@MainActivity);StandaloneService.instance?.restart()}){Text("Reconnect helpers")}
         Text("Keep Samsung’s interactive wallpaper on both screens. Stop any older fold helper. If accessibility is blocked: App info → ⋮ → Allow restricted settings.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName")))}){Text("App & battery settings")}
        }
@@ -259,6 +266,8 @@ class MainActivity:ComponentActivity(){
         Slider(value=closedThreshold,onValueChange={closedThreshold=it.roundToInt().toFloat()},valueRange=1f..10f,steps=8,onValueChangeFinished={prefs.edit().putFloat("closed_threshold",closedThreshold).apply();restart()})
         Text("At or below this angle, treat the phone as fully closed and clear the cover effect. Default: 2°.",style=MaterialTheme.typography.bodySmall)
         TextButton(onClick={closedThreshold=2f;prefs.edit().putFloat("closed_threshold",2f).apply();restart()}){Text("Reset to 2°")}
+        Toggle("Closed-hinge jitter protection",jitterProtection){jitterProtection=it;booleanSetting("closed_hinge_jitter_protection",it)}
+        Text("On by default. Starts at ${(ClosedHingeGate.startAngle(closedThreshold)).roundToInt()}°; once started, follows the hinge until it returns to ${closedThreshold.roundToInt()}° or less. Filters tiny closed-phone readings before the animation and cover preview start. Turn off to restore the original threshold behavior.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         Text("Auto-rotate recovery",style=MaterialTheme.typography.titleMedium)
         Text("For stuck rotation: turn fold animation off, then repair. This enables auto-rotate for both postures and restores the default rotation policy. Requires connected Shizuku.",style=MaterialTheme.typography.bodySmall)
