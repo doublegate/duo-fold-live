@@ -2,8 +2,12 @@ package org.duofold.live;
 /** Completion-paced: never queue overlapping Binder polls or catch-up bursts. */
 final class PollCadence {
  static final long FAST_MS=4,STILL_MS=33,SCREEN_OFF_MS=500,MOTION_HOLD_MS=400;
- /** Panel switches happen between these angles on every supported fold; stay fast there even when paused. */
+ /**
+  * Panel switches happen between these angles on every supported fold; stay fast there through a brief pause
+  * (BAND_HOLD_MS) so a resumed fold is caught at once, but not while resting there (Flex posture, plan C1).
+  */
  static final float SWITCH_BAND_LOW=80,SWITCH_BAND_HIGH=115;
+ static final long BAND_HOLD_MS=2000;
  static long delay(boolean interactive, long elapsedMs, boolean urgent) {
   return delay(interactive,elapsedMs,urgent,0,Float.NaN);
  }
@@ -19,6 +23,9 @@ final class PollCadence {
   return Math.max(1, period - Math.max(0, elapsedMs));
  }
  static boolean fast(long sinceChangeMs,float angle){
-  return !Float.isFinite(angle)||sinceChangeMs<MOTION_HOLD_MS||(angle>=SWITCH_BAND_LOW&&angle<=SWITCH_BAND_HIGH);
+  return !Float.isFinite(angle)||sinceChangeMs<MOTION_HOLD_MS||(sinceChangeMs<BAND_HOLD_MS&&inBand(angle));
+ }
+ static boolean inBand(float angle){
+  return angle>=SWITCH_BAND_LOW&&angle<=SWITCH_BAND_HIGH;
  }
 }

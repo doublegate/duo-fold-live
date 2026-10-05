@@ -1,3 +1,27 @@
+## 3.5.2-a16.10 — Idle costs nothing: hot paths off the poll and frame loops (fork, Phase C)
+
+Plan Phase C (C1-C6; C3 landed in a16.8) plus D5 and D8. **All models** unless noted. Verified by unit tests only.
+
+- Resting in the 80-115 deg switch band (Flex posture) no longer keeps 4 ms angle polling, 8 ms secondary refreshes
+  and per-vsync fade ticks forever: the band is treated as "moving" only within 2 s of the last angle change (C1).
+- The secondary-panel refresh looks up display 1 directly instead of listing every display, and the overlay reads
+  the keyguard state through one 200 ms cache (cleared on every screen/unlock broadcast) instead of a Binder call per
+  animation frame and per refresh (C1, C2).
+- `DuoLiveShade` stops requesting a frame every vsync once the smoothed angle has settled; it waits for the next
+  angle or panel change (re-checking freshness every 250 ms). It ran a 120 Hz frame loop for as long as the screen
+  was on (C2).
+- The post-switch hold reads display info through the cached `DisplayManagerGlobal`, checks the keyguard every
+  200 ms instead of every 8 ms tick, and the angle poll no longer waits up to 24 ms on the hold's handler once the
+  hold has started (C4). A prepare or hold request that races the helper's shutdown now frees its parcelled bitmaps
+  and skips the wait (D5).
+- Frozen glass frames build their mip pyramid on the capture executor, not with seven `createScaledBitmap` calls on
+  the main thread at the first frozen draw (C5). Per-frame SharedPreferences reads were measured as in-memory map
+  lookups (~1.7k/s at 120 Hz) and deliberately left uncached.
+- The diagnostic continuity probe's task-manager checks run at most every 50 ms instead of on every 4 ms poll (C6).
+- The fade engine wakes on every real angle change; reading its idle flag from the Binder thread could miss a wake
+  for up to 50 ms (D8).
+- Tests: `PollCadenceTest` band hold.
+
 ## 3.5.2-a16.9 — One geometry and one blur curve on both sides of each switch (fork, Phase B)
 
 Plan Phase B (items B1-B10) plus F1. Fold 7 unified renderer only unless marked **all models**. Verified by unit

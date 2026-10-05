@@ -34,7 +34,7 @@ final class HandoffFade {
  private static final boolean FAST_SWITCH_TICKS=DeviceCompatibility.isFold7(Build.MODEL);
  private final Choreographer.FrameCallback frame=when->this.tick.run();
  void settings(float smoothing,float gradualness,boolean requireGlass,float open){this.smoothing=smoothing;this.gradualness=gradualness;requireInnerGlass=requireGlass;openThreshold=open;}
- private boolean idle;
+ private volatile boolean idle;private volatile long lastMovedAt;
  // Right-half blur continuity (RightHalfBlur): one effect layer on the inner panel while it is primary.
  private static final boolean RIGHT_BLUR=DeviceCompatibility.isFold7(Build.MODEL);
  private SurfaceControl rightBlur;private Method effectLayer,blurRadius;
@@ -58,7 +58,10 @@ final class HandoffFade {
  HandoffFade(){float[] black=HandoffFadePolicy.blackAnglesFor(Build.MODEL);policy.blackAngles(black[0],black[1]);policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.openingReadyTimeout(HandoffFadePolicy.openingReadyTimeoutFor(Build.MODEL));policy.coverGlass(DeviceCompatibility.isFold7(Build.MODEL)&&UnifiedRenderer.enabled());policy.closingReadyTimeout(HandoffFadePolicy.closingReadyTimeoutFor(Build.MODEL));policy.freshWindow(HandoffFadePolicy.freshWindowFor(Build.MODEL));policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));blurSwitch=black[1];thread.start();handler=new Handler(thread.getLooper());}
  void update(boolean enabled,float angle,boolean fresh){
   long now=SystemClock.elapsedRealtime();boolean moved=fresh&&Float.compare(angle,this.angle)!=0;if(fresh){this.angle=angle;lastFresh=now;}
-  this.enabled=enabled;lease=now;if((!ticking||!enabled||(idle&&moved))&&wakePending.compareAndSet(false,true))handler.post(start);
+  if(moved)lastMovedAt=now;
+  // Wake on every real angle change (plan D8): reading `idle` from this Binder thread could miss the tick
+  // that just turned idle; wakePending already drops duplicate posts.
+  this.enabled=enabled;lease=now;if((!ticking||!enabled||moved)&&wakePending.compareAndSet(false,true))handler.post(start);
  }
  private final Runnable start=()->{wakePending.set(false);if(!enabled){clear();return;}if(closed)return;if(!ticking){ticking=true;this.tick.run();}else if(idle)this.tick.run();};
  private final Runnable readinessTick=()->{if(ticking&&!closed&&enabled)this.tick.run();};
@@ -134,7 +137,7 @@ final class HandoffFade {
     if(rightHalfBlur(t,now,inner,p))changed=true;
     if(changed)t.apply();
    }
-   idle=!policy.transitioning()&&alpha<=0f&&mirrorAlpha<=0f&&!blurMoving&&(angle<PollCadence.SWITCH_BAND_LOW||angle>PollCadence.SWITCH_BAND_HIGH);
+   idle=!policy.transitioning()&&alpha<=0f&&mirrorAlpha<=0f&&!blurMoving&&!PollCadence.fast(now-lastMovedAt,angle);  // C1: not while resting in the band
    if(now>=statusAt){statusAt=now+250;status="Handoff fade: "+Math.round(alpha*100)+"%; primary="+(inner?"inner":"cover")+"; "+(policy.transitioning()?"destination black/reveal":"angle fade")+"; "+policy.readiness+"; glass commit settle 2 ms; legacy ON settle 32 ms; reveal "+policy.revealMs(gradualness)+" ms";}
    schedule();
   }catch(Exception e){clear();status="Handoff fade unavailable: "+e.getClass().getSimpleName()+": "+e.getMessage();}

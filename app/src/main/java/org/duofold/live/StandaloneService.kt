@@ -64,14 +64,22 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
     private fun note(message:String){status=message;history.addLast("${SystemClock.uptimeMillis()} $message");while(history.size>50)history.removeFirst()}
     private val captureTask=Runnable { captureQueued=false }
     private val screenReceiver=object:BroadcastReceiver(){override fun onReceive(c:Context,i:Intent){
-        RecoveryLog.add("Overlay received ${i.action}")
+        RecoveryLog.add("Overlay received ${i.action}");lockedAt=0L
         if(i.action==Intent.ACTION_SCREEN_OFF){GlassFrames.suspendCapture();handler.postDelayed({if(!usable())HandoffFrames.clear()},300);owner?.registry?.currentState=Lifecycle.State.CREATED;clearUnavailableEffect()}
         else if(i.action==Intent.ACTION_USER_PRESENT){
             // Recreate the composition after unlock: old window IDs and stopped frame clocks are invalid.
             handler.postDelayed({if(instance===this@StandaloneService && settings().getBoolean("enabled",false)){restart();RecoveryLog.add("Overlay rebuilt after unlock")}},150)
         } else {updateDisplay();resumeIfUsable()}
     }}
-    private fun usable()=::displays.isInitialized && displays.getDisplay(Display.DEFAULT_DISPLAY)?.state==Display.STATE_ON && !getSystemService(KeyguardManager::class.java).isKeyguardLocked()
+    // Keyguard state is a Binder call; usable() runs per animation frame (onFrame) and per secondary refresh.
+    // Cache it for 200 ms and drop the cache on every screen/unlock broadcast (plan C1/C2). Main thread only.
+    private var lockedAt=0L;private var lockedCached=false
+    private fun keyguardLocked():Boolean{
+        val now=SystemClock.uptimeMillis()
+        if(lockedAt==0L||now-lockedAt>=200){lockedCached=getSystemService(KeyguardManager::class.java).isKeyguardLocked();lockedAt=now}
+        return lockedCached
+    }
+    private fun usable()=::displays.isInitialized && displays.getDisplay(Display.DEFAULT_DISPLAY)?.state==Display.STATE_ON && !keyguardLocked()
     private fun previewMode()=AnimationModePolicy.mirrors(settings().getString("animation_mode",AnimationModePolicy.DEFAULT)) && LiveAngles.effectAllowed && settings().getBoolean("cover_preview",true) && !settings().getBoolean("dual",false)
     private fun settings()=getSharedPreferences("standalone",0)
     override fun onServiceConnected(){
@@ -168,11 +176,11 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         val current=displays.getDisplay(0)
         val primaryInner=current?.mode?.let{minOf(it.physicalWidth,it.physicalHeight).toFloat()/maxOf(it.physicalWidth,it.physicalHeight)>.7f}?:false
         PreviewTransition.configure(this)
-        PreviewTransition.update(!LiveAngles.nativeInner && previewMode() && settings().getBoolean("enabled",false) && !getSystemService(KeyguardManager::class.java).isKeyguardLocked(),primaryInner)
+        PreviewTransition.update(!LiveAngles.nativeInner && previewMode() && settings().getBoolean("enabled",false) && !keyguardLocked(),primaryInner)
         val native=LiveAngles.continuityNative && !primaryInner
         val preview=!settings().getBoolean("dual",false) && settings().getBoolean("cover_preview",true) && LiveAngles.coverPreview
         if(!LiveAngles.effectAllowed||!settings().getBoolean("enabled",false)||(!native && !preview && (!settings().getBoolean("dual",false)||!LiveAngles.dualActive))||!usable()){dismissSecondary();return}
-        val target=displays.displays.firstOrNull{it.displayId==1 && BuiltInPanel.accepts(it)}
+        val target=displays.getDisplay(1)?.takeIf{BuiltInPanel.accepts(it)}  // one lookup, not a full display-id listing
         if(target==null){secondaryError="Concurrent mode has not exposed the second built-in panel";dismissSecondary();return}
         if(native){
             val key=physicalKey(target)+":native-overlay"

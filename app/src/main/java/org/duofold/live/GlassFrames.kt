@@ -70,7 +70,9 @@ internal object GlassFrames {
     p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(valid.size);valid.forEach{p.writeTypedObject(it,0)}
     LiveAngles.captureBinder().transact(3,p,r,0);r.readException();val result=r.readBundle(Bitmap::class.java.classLoader)
     val bitmap=result?.getParcelable("bitmap",Bitmap::class.java)
-    if(result?.getBoolean("ok")==true && bitmap!=null){captured=GlassFrame(bitmap,result.getInt("width"),result.getInt("height"),result.getLong("stamp"));note="capture ${SystemClock.elapsedRealtime()-captureStarted} ms; queue ${captureStarted-requestedAt} ms"}
+    // Plan C5: build the mip pyramid here, off the main thread; DuoGlass built it with 7 createScaledBitmap
+    // calls on the main thread at the first frozen draw.
+    if(result?.getBoolean("ok")==true && bitmap!=null){captured=GlassFrame(bitmap,result.getInt("width"),result.getInt("height"),result.getLong("stamp"),runCatching{levels(bitmap)}.getOrDefault(emptyList()));note="capture ${SystemClock.elapsedRealtime()-captureStarted} ms; queue ${captureStarted-requestedAt} ms"}
     else note=result?.getString("error")?:note
    }catch(e:Exception){note=e.message?:note}finally{p.recycle();r.recycle()}
    val f=captured;val message=note;main.post{done(f,message)}

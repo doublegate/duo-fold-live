@@ -18,6 +18,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | 3.5.2-a16.7 | `8a39812` | Gated close, glass frame retention, RightHalfBlur, adaptive polling, stall fixes, `fold7test`. |
 | 3.5.2-a16.8 | Phase A | Every override release gated (mode, teardown, dual, probe, cancel, direct inner). |
 | 3.5.2-a16.9 | Phase B | Right-half geometry, strip pose blend, shared blur curve and tuning, capture fidelity. |
+| 3.5.2-a16.10 | Phase C | Hot paths: band hold, keyguard caches, settled shade, cached display info, probe rate limit. |
 
 ## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
 
@@ -76,7 +77,10 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 
 | Value | Setting | Why |
 | --- | --- | --- |
-| Poll period | 4 ms while the angle changed in the last 400 ms or sits in the 80-115 deg band; 33 ms otherwise; 500 ms with the screen off | The wallpaper reports every 30-130 ms in 2-3 deg steps; 4 ms polling when still bought nothing. |
+| Poll period | 4 ms while the angle changed in the last 400 ms, or within 2 s of a change inside the 80-115 deg band; 33 ms otherwise; 500 ms with the screen off | The wallpaper reports every 30-130 ms in 2-3 deg steps; 4 ms polling when still bought nothing, and resting in Flex posture kept it fast forever. |
+| Fade engine idle | no per-vsync ticks unless switching, fading or within the same motion/band window | Same reason. |
+| Keyguard checks | overlay: 200 ms cache cleared on screen/unlock broadcasts; hold: every 200 ms | Binder call per animation frame / per 8 ms tick. |
+| Shade frame loop | suspended once the smoothed angle settles; wakes on angle or panel change, 250 ms re-check | Ran at 120 Hz whenever the screen was on. |
 | Secondary-panel refresh | 8 ms moving, 100 ms still | Each refresh makes several Binder calls on the main thread. |
 | Mirror attach IPC | own thread on both sides | The attach waits up to 250 ms for its commit and stalled the angle poll mid-transition. |
 
