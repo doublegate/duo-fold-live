@@ -1,3 +1,22 @@
+## 3.5.2-a16.12 — One source for the handoff angles, endpoint freshness, test coverage (fork, Phase E)
+
+Plan Phase E (E3-E5, E7-E9; E1, E2 and E6 landed with the plan). Verified by unit tests only.
+
+- **All models:** the cover-hold hysteresis (94 deg request, 98 deg release) has one source,
+  `HandoffPolicy.HOLD_ANGLE` / `RELEASE_ANGLE`, used by `DirectHandoffPolicy`, the release gate's "reopening" check in
+  `CoverHandoff` and `ConcurrentController`, the pre-release hold and the continuity probe. The gate's escape had to
+  equal the policy's release angle and only matched by coincidence (E4).
+- **All models:** `ReleaseDeferral` is the one bounded "wait for CLOSED" timer behind every override release; the
+  cover hold and the dual-mode session each had their own copy (E8).
+- The inner fully-open endpoint accepts frames up to the same freshness window as the reveal readiness (700 ms on the
+  Fold 7); it used the 350 ms default, so 350-700 ms frames never counted (E5).
+- Decision (E3): the release gate, polling cadence and race fixes stay enabled on every model and are labelled
+  "all models" here; the gate protects against the same Samsung device-state sleep transition on other foldables.
+- Tests: `AngleParserTest` (both formats, invisible samples, action changes, range), `ReleaseDeferralTest`, pinned
+  hysteresis constants, the PreviewExpansion no-readiness 120 ms fade, and every per-model closing-cap default (E8).
+- Owner workspace tooling: contact sheets show gate defers and fallbacks and accept both angle formats (E7); the
+  workspace README documents the capture scripts as device-modifying (E9).
+
 ## 3.5.2-a16.11 — Service-process races and stalls (fork, Phase D)
 
 Plan Phase D (D1-D4, D6, D7; D5 and D8 landed in a16.10). **All models.** Verified by unit tests only.

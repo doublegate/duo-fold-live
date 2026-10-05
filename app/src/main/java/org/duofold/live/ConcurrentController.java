@@ -15,15 +15,15 @@ final class ConcurrentController {
  private boolean nativeRetried;
  // Plan A6: the outer (cover, state 5) session is the same override CoverHandoff gates; releasing it before the
  // base state is CLOSED goes 5->2->0 (sleep). Inner (4) sessions end at open/endpoint and stay ungated.
- private volatile boolean screenOn=true;private long deferSince;
+ private volatile boolean screenOn=true;private final ReleaseDeferral deferral=new ReleaseDeferral();
  void screen(boolean on){screenOn=on;}
  private boolean deferOuter(float angle){
   long now=SystemClock.elapsedRealtime();
   boolean outer=owned!=null&&!primaryInner;
-  boolean reopening=Float.isFinite(angle)&&angle>=98;
-  long deferred=deferSince==0?0:now-deferSince;
-  if(!outer||CloseReleaseGate.allow(false,screenOn,reopening,deferred)||!CloseReleaseGate.defer(true,BaseDeviceState.closed(),screenOn,reopening,deferred)){deferSince=0;return false;}
-  if(deferSince==0){deferSince=now;if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","dual: defer outer release (angle="+angle+")");}
+  boolean reopening=Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
+  boolean was=deferral.deferring();
+  if(!deferral.keep(now,outer,screenOn,reopening,BaseDeviceState::closed))return false;
+  if(!was&&BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","dual: defer outer release (angle="+angle+")");
   status="Waiting for the hinge to report closed before releasing the cover session";
   return true;
  }
@@ -84,7 +84,7 @@ final class ConcurrentController {
     if(endpointSince==0)endpointSince=now;
     if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(deferOuter(angle))return;releaseInternal();blocked=false;}return;
    }
-   endpointSince=0;deferSince=0;
+   endpointSince=0;deferral.reset();
    if(owned==null){if(!blocked&&FoldThreshold.canStart(angle,openThreshold)){if(FreezePolicy.canSwitch(primaryIsInner,frozenSource))begin(FreezePolicy.targetInner(frozenSource),now);else status="Waiting for outgoing frame before switching displays";}return;}
    if(primaryIsInner!=primaryInner && now<mappingDeadline)return;
    if(primaryIsInner!=primaryInner)throw new IllegalStateException("Primary physical display changed during session");

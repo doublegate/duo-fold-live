@@ -206,6 +206,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private val unifiedLeft=UnifiedRenderer.enabled()
  private val fallbackColors=IntArray(65)
  private val switchAngle=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1]
+ // Plan E5: the fully-open endpoint uses the same freshness window as the reveal readiness (700 ms on the Fold 7).
+ private val endpointFreshMs=HandoffFadePolicy.freshWindowFor(android.os.Build.MODEL)
  private var hingeAngle=Float.NaN
  private var targetAngle=Float.NaN
  private var renderedAngle=Float.NaN
@@ -369,7 +371,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      if(endpoint && inner){
       val current=sourceSize(scratchSize)
       val content=frame
-      if(content!=null && content.display==sourceDisplay() && GlassFramePolicy.usable(content.stamp,SystemClock.elapsedRealtime(),content.width,content.height,current.x,current.y))rendered=content else endpoint=false
+      if(content!=null && content.display==sourceDisplay() && GlassFramePolicy.usable(content.stamp,SystemClock.elapsedRealtime(),content.width,content.height,current.x,current.y,endpointFreshMs))rendered=content else endpoint=false
      }
      return@runCatching
     }

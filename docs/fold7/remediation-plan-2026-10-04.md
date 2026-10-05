@@ -22,7 +22,7 @@ Effective angle maps <= 2 deg to 0, which fires 9-103 ms before the base state r
 | B | 3.5.2-a16.9 | Done | B1-B10 and F1. B2 uses the pose blend (progress, motion, blur and darkening equal at the switch) rather than switching the strip to the inner leaf model, which needs a texture remap that cannot be validated off-device. B3 also aligns the post-switch hold. |
 | C | 3.5.2-a16.10 | Done | C1-C6 (C3 in a16.8). C5: mip pyramid moved off the main thread; per-frame SharedPreferences reads measured as negligible and left as is. C6: rate-limited to 50 ms instead of a separate thread (same effect on the poll, no new threading). D5 and D8 landed here. |
 | D | 3.5.2-a16.11 | Done | D1-D4, D6, D7 (D5, D8 in a16.10). D1 via a generation ticket + `ReentrantLock.tryLock` revoke. D4 copies handles with the framework's (hidden) copy constructor, falling back to the originals if it is missing. D6 hands over after the old hold releases rather than reusing the instance. |
-| E | — | Planned | E1, E2, E6 done with the plan itself. |
+| E | 3.5.2-a16.12 | Done | E1, E2, E6 with the plan; E3 decided: gate, cadence and race fixes stay on all models (labelled in the CHANGELOG); E4 `HandoffPolicy.HOLD_ANGLE`/`RELEASE_ANGLE`; E5 endpoint uses `freshWindowFor`; E7/E9 in the owner workspace (sheets, README, workspace plan status, workspace markdownlint config); E8 tests plus `ReleaseDeferral` extraction. |
 | F | — | Planned | F1 done in Phase B. |
 
 ## Results that motivated this plan

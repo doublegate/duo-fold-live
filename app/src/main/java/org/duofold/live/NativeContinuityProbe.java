@@ -26,13 +26,13 @@ final class NativeContinuityProbe {
    if(!holding){if(active)finish(interactive);active=false;return;}
    if(!active){active=true;lastCheck=0;attempted=false;verified=false;finished=false;repaired=false;focusReported=false;focusSnapshot=false;router=null;cover=null;inner=null;events.clear();note("Fixed mapping hold started; native route waits for 98 degrees");}
    if(finished)return;
-   if(!attempted&&angle>=98){
+   if(!attempted&&angle>=HandoffPolicy.RELEASE_ANGLE){
     attempted=true;requestedAt=SystemClock.elapsedRealtime();
     cover=panel(0);inner=panel(1);
     router=new TaskDisplayRouter();note(router.beginProbe());note(router.probeSnapshot());requestedAt=SystemClock.elapsedRealtime();
    }
    if(attempted&&router!=null){
-    if(angle<=94){finish(interactive);return;}
+    if(angle<=HandoffPolicy.HOLD_ANGLE){finish(interactive);return;}
     // Plan C6: these are activity-task-manager calls (window manager global lock) made from the 4 ms angle poll
     // under the AngleReader and CoverHandoff monitors. The milestones below are 350/1000/2000 ms apart, so one
     // check round per CHECK_MS is enough.

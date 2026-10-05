@@ -6,7 +6,7 @@ import java.util.concurrent.Executor;
 /** A process-owned request: Android releases it if this Shizuku process dies. */
 final class CoverHandoff {
  private Object manager,owned; private Method cancel,request; private Class<?> requestType,callbackType;
- private int coverId=-1,innerId=-1;private long deferSince=0; private boolean innerHeld=false;
+ private int coverId=-1,innerId=-1;private final ReleaseDeferral deferral=new ReleaseDeferral(); private boolean innerHeld=false;
  // Display power only (plan A2); "unlocked" still decides whether to request at all.
  private volatile boolean screenOn=true;
  void screen(boolean on){screenOn=on;} private final HandoffPolicy policy=new HandoffPolicy();
@@ -45,7 +45,7 @@ final class CoverHandoff {
   if(!fresh||!interactive){if(gatedRelease(angle,fresh))return;releaseOwned();return;}
   int action=policy.update(angle,fresh,interactive);
   if(action<0){if(gatedRelease(angle,fresh)){policy.cover=true;return;}releaseOwned();return;}
-  deferSince=0;
+  deferral.reset();
   if(action!=1)return;
   changeState(false);
  }
@@ -65,7 +65,7 @@ final class CoverHandoff {
     if(m.getName().equals("hashCode"))return System.identityHashCode(proxy);
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
-    if(m.getName().equals("onRequestCanceled")){if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","request canceled by system");synchronized(this){if(owned==next){owned=null;innerHeld=false;policy.onCanceled();deferSince=0;status="Concurrent handoff request canceled by system";}}}return null;
+    if(m.getName().equals("onRequestCanceled")){if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","request canceled by system");synchronized(this){if(owned==next){owned=null;innerHeld=false;policy.onCanceled();deferral.reset();status="Concurrent handoff request canceled by system";}}}return null;
    });
    owned=next;innerHeld=toInner;request.invoke(manager,next,(Executor)Runnable::run,callback);
    if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","request "+(toInner?"inner":"cover")+" concurrent state");
@@ -77,11 +77,11 @@ final class CoverHandoff {
  private boolean gatedRelease(float angle,boolean fresh){
   if(owned==null||innerHeld)return false;
   long now=SystemClock.elapsedRealtime();
-  boolean reopening=fresh&&Float.isFinite(angle)&&angle>=98;
-  long deferred=deferSince==0?0:now-deferSince;
-  // Cheap escapes first: the base-state query is a system_server call on the 4 ms poll path (plan C3).
-  if(CloseReleaseGate.allow(false,screenOn,reopening,deferred)||!CloseReleaseGate.defer(true,BaseDeviceState.closed(),screenOn,reopening,deferred)){deferSince=0;return false;}
-  if(deferSince==0){deferSince=now;if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","defer release: base state not CLOSED yet (angle="+angle+", fresh="+fresh+", screenOn="+screenOn+")");}
+  boolean reopening=fresh&&Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
+  boolean was=deferral.deferring();
+  // Cheap escapes first inside ReleaseDeferral: the base-state query is a system_server call on the poll (C3).
+  if(!deferral.keep(now,true,screenOn,reopening,BaseDeviceState::closed))return false;
+  if(!was&&BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","defer release: base state not CLOSED yet (angle="+angle+", fresh="+fresh+", screenOn="+screenOn+")");
   return true;
  }
  /** External release (effect disallowed by the mode, dual mode toggled): gated like every other release (plan A1). */

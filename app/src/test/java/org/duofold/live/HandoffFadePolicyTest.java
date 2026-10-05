@@ -235,4 +235,9 @@ public class HandoffFadePolicyTest {
   assertEquals(1,p.opacity(520,true,101,true,true,510,true,g,20),0);           // captured at 20, committed at 510: 500 ms old
   assertTrue(p.opacity(600,true,101,true,true,510,true,g,20)<1);               // accepted
  }
+ // Plan E8: pin every per-model closing cap default; other models keep the upstream 900 ms.
+ @Test public void closingReadyTimeoutDefaultsArePinned(){
+  assertEquals(300,HandoffFadePolicy.closingReadyTimeoutFor("SM-F966U1"));
+  assertEquals(HandoffFadePolicy.READY_TIMEOUT_MS,HandoffFadePolicy.closingReadyTimeoutFor("SM-F971U"));
+ }
 }

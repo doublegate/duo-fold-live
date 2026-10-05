@@ -31,4 +31,11 @@ public class PreviewExpansionPolicyTest {
   assertEquals(0f,PreviewExpansionPolicy.opacity(1500,-1,0),0);
   assertEquals(PreviewExpansionPolicy.opacity(110,50),PreviewExpansionPolicy.opacity(110,50,120),0);
  }
+ // Plan E8: with zero fade but no readiness (timeout path) the hold still cross-fades over 120 ms.
+ @Test public void noReadinessKeepsTheCrossFadeEvenWithZeroFade(){
+  assertEquals(1f,PreviewExpansionPolicy.opacity(1200,-1,0),1e-6);
+  assertEquals(.5f,PreviewExpansionPolicy.opacity(1260,-1,0),1e-6);
+  assertEquals(0f,PreviewExpansionPolicy.opacity(1320,-1,0),1e-6);
+  assertEquals(0f,PreviewExpansionPolicy.opacity(400,300,0),1e-6);   // with readiness: dropped at once
+ }
 }

@@ -8,7 +8,7 @@ final class DirectHandoffPolicy {
   if(innerHeld&&enabled&&fresh&&interactive&&Float.isFinite(angle)&&angle<=0)return COVER;
   if(!fresh||!interactive||!Float.isFinite(angle)||angle<=0||angle>=FoldThreshold.sanitize(open))return RELEASE;
   if(!enabled)return innerHeld?RELEASE:HOLD;
-  if(innerHeld)return angle<=94?COVER:HOLD;
-  return angle>=98?INNER:HOLD;
+  if(innerHeld)return angle<=HandoffPolicy.HOLD_ANGLE?COVER:HOLD;
+  return angle>=HandoffPolicy.RELEASE_ANGLE?INNER:HOLD;
  }
 }
