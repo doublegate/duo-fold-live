@@ -20,8 +20,7 @@ public final class LiveAngles {
  public static void cancelContinuityProbe(){continuityRequest=0;handoffReady();}
  public static String rotationHold="Rotation hold idle";
  public static String handoffFade="Handoff fade idle";
- private static long lastSwitchedAt;
- private static final boolean PRECAPTURE=DeviceCompatibility.isFold7(android.os.Build.MODEL)&&UnifiedRenderer.enabled();
+
  public static String bridgeTrace="No bridge";
  public static String expansionStatus="Expansion idle";
  public static String mirrorStatus="Inner live mirror idle";
@@ -31,8 +30,8 @@ public final class LiveAngles {
  public interface MirrorCallback {void ready(boolean ok,String status);}
  public static int attachMirror(SurfaceControl parent,int width,int height,MirrorCallback callback){
   int id=++mirrorSerial;LiveAngles self=current;
-  if(self==null||!self.running||self.worker==null){callback.ready(false,"Angle reader unavailable");return id;}
-  self.worker.post(()->{
+  if(self==null||!self.running||self.mirrorWorker==null){callback.ready(false,"Angle reader unavailable");return id;}
+  self.mirrorWorker.post(()->{
    Parcel p=Parcel.obtain(),r=Parcel.obtain();boolean ok=false;String message;
    try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);p.writeTypedObject(parent,0);p.writeInt(width);p.writeInt(height);
     IBinder binder=self.reader;if(binder==null||!binder.transact(4,p,r,0))throw new IllegalStateException("Mirror reader unavailable");
@@ -42,8 +41,8 @@ public final class LiveAngles {
    boolean success=ok;String status=message;self.main.post(()->callback.ready(success,status));
   });return id;
  }
- public static void detachMirror(int id){LiveAngles self=current;if(id<=0||self==null||self.worker==null)return;
-  self.worker.post(()->{Parcel p=Parcel.obtain(),r=Parcel.obtain();try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);if(self.reader!=null){self.reader.transact(5,p,r,0);r.readException();}}catch(Exception ignored){}finally{p.recycle();r.recycle();}});
+ public static void detachMirror(int id){LiveAngles self=current;if(id<=0||self==null||self.mirrorWorker==null)return;
+  self.mirrorWorker.post(()->{Parcel p=Parcel.obtain(),r=Parcel.obtain();try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);if(self.reader!=null){self.reader.transact(5,p,r,0);r.readException();}}catch(Exception ignored){}finally{p.recycle();r.recycle();}});
  }
  public static void previewCommand(int code,Parcel p,Parcel r)throws Exception{
   LiveAngles self=current;IBinder binder=self==null?null:self.reader;
@@ -61,19 +60,20 @@ public final class LiveAngles {
  public static void add(Listener l){listeners.add(l);if(fresh())l.angle(angle,last*1000000L);}
  public static void remove(Listener l){listeners.remove(l);}
  private final Context context; private final Handler main=new Handler(Looper.getMainLooper());
- private HandlerThread thread; private Handler worker; private volatile boolean running; private volatile IBinder reader;
+ private HandlerThread thread,mirrorThread; private Handler worker; private volatile Handler mirrorWorker; private volatile boolean running; private volatile IBinder reader;
  private WindowManager wm; private View anchor;
  private WindowManager secondaryWm;private View secondaryAnchor;private String anchorKey="",secondaryKey=""; private Shizuku.UserServiceArgs args;
  private volatile long lastPoll;
  private long secondaryRefreshAt,statusFormatAt;
  public static volatile boolean effectAllowed=true;
  private boolean pollInFlight,urgentPoll;
+ private long angleChangedAt;
  private long pollStarted;
  private static long roundTripMs;
  private static String rateSummary="Collecting polling rates";
  private long rateStarted;private int ratePolls,rateReplies,rateChanges,rateReceived;
  public static volatile String readerDiagnostics="Not connected";
- public static String latencyReport(){return "Angle poll target period: 4 ms; last round trip: "+roundTripMs+" ms; "+rateSummary;}
+ public static String latencyReport(){return "Angle poll target period: 4 ms moving / 33 ms still; last round trip: "+roundTripMs+" ms; "+rateSummary;}
  public static void handoffReady(){LiveAngles self=current;if(self==null)return;self.main.post(()->{
   if(!self.running)return;
   if(self.pollInFlight){self.urgentPoll=true;return;}
@@ -96,6 +96,8 @@ public final class LiveAngles {
    running=true;current=this;last=0;count=0;action="org.duofold.live.wallpaperprobe.READ_"+SystemClock.elapsedRealtime();
    ensureAnchors();
    thread=new HandlerThread("duofold-angle-ipc");thread.start();worker=new Handler(thread.getLooper());
+   // Own thread: a mirror attach waits up to 250 ms for its commit and must never queue the 4 ms angle poll.
+   mirrorThread=new HandlerThread("duofold-mirror-ipc");mirrorThread.start();mirrorWorker=new Handler(mirrorThread.getLooper());
    args=new Shizuku.UserServiceArgs(new ComponentName(context,AngleReader.class)).daemon(false).processNameSuffix("fold_angles").version(BuildConfig.VERSION_CODE);
    bound=true;Shizuku.bindUserService(args,connection);status="Connecting to Shizuku…";
    main.postDelayed(()->{if(running&&reader==null){status="Connection timed out — reconnect in app";stop();}},12000);
@@ -126,7 +128,7 @@ public final class LiveAngles {
    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,PixelFormat.TRANSLUCENT);
   p.gravity=Gravity.TOP|Gravity.LEFT;p.setTitle("Duo angle source");return p;
  }
- private void sendAngleCommand(View v){if(v!=null&&v.getWindowToken()!=null)WallpaperManager.getInstance(v.getContext()).sendWallpaperCommand(v.getWindowToken(),action,0,0,0,null);}
+ private void sendAngleCommand(IBinder token){if(token!=null)WallpaperManager.getInstance(context).sendWallpaperCommand(token,action,0,0,0,null);}
  private Bundle call(int code)throws Exception{
   IBinder b=reader;if(b==null)throw new IllegalStateException("Reader disconnected");
   Parcel p=Parcel.obtain(),r=Parcel.obtain();try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);if(code==1){p.writeString(action);p.writeString(context.getApplicationInfo().sourceDir);}if(code==2)p.writeInt(StandaloneService.Companion.getInstance()!=null && context.getSharedPreferences("standalone",0).getBoolean("enabled",false) && context.getSystemService(PowerManager.class).isInteractive() && !context.getSystemService(android.app.KeyguardManager.class).isKeyguardLocked()?1:0);
@@ -143,20 +145,20 @@ public final class LiveAngles {
   if(!running||pollInFlight)return;
   pollInFlight=true;pollStarted=SystemClock.elapsedRealtime();
   boolean on=context.getSystemService(PowerManager.class).isInteractive();
-  try{if(on){ensureAnchors();sendAngleCommand(anchor);sendAngleCommand(secondaryAnchor);}}
+  IBinder primaryToken=null,secondaryToken=null;
+  try{if(on){ensureAnchors();primaryToken=anchor==null?null:anchor.getWindowToken();secondaryToken=secondaryAnchor==null?null:secondaryAnchor.getWindowToken();}}
   catch(Exception e){fail(e);return;}
-  worker.post(()->{try{Bundle b=call(2);
+  IBinder first=primaryToken,second=secondaryToken;
+  worker.post(()->{try{sendAngleCommand(first);sendAngleCommand(second);Bundle b=call(2);
    if(ReaderRecovery.needsRestart(b.getString("state"))){main.post(()->{if(running){RecoveryLog.add("Expired wallpaper reader lease; paced recovery");stop();status="Reader lease expired — awaiting recovery";}});return;}
    main.post(()->{
    if(!running)return;
    String nextHandoff=b.getString("handoff", "Unknown display status");
    if(!nextHandoff.equals(handoffStatus))RecoveryLog.add(nextHandoff);
    handoffStatus=nextHandoff;continuityStatus=b.getString("continuityProbe","Continuity status unavailable");continuityTrace=b.getString("continuityTrace","");
-   long sw=b.getLong("switchedAt",0);
-   if(sw!=lastSwitchedAt){lastSwitchedAt=sw;if(sw>0&&PRECAPTURE)main.post(GlassFrames.INSTANCE::precapture);}
    rotationHold=b.getString("rotationHold","Rotation hold idle");effectAllowed=b.getBoolean("effectAllowed",true);handoffFade=b.getString("handoffFade","Handoff fade idle");dualActive=b.getBoolean("dualActive");coverPreview=b.getBoolean("coverPreview");expansionStatus=b.getString("expansion","Expansion idle");bridgeTrace=b.getString("bridgeTrace","No bridge");
    mirrorStatus=b.getString("mirror","Inner mirror status unavailable");nativeInner=b.getBoolean("nativeInner");continuityNative=b.getBoolean("continuityNative");
-   StandaloneService host=StandaloneService.Companion.getInstance();if(host!=null&&SystemClock.elapsedRealtime()>=secondaryRefreshAt){secondaryRefreshAt=SystemClock.elapsedRealtime()+8;host.refreshSecondary();}
+   StandaloneService host=StandaloneService.Companion.getInstance();if(host!=null&&SystemClock.elapsedRealtime()>=secondaryRefreshAt){secondaryRefreshAt=SystemClock.elapsedRealtime()+(PollCadence.fast(SystemClock.elapsedRealtime()-angleChangedAt,fresh()?angle:Float.NaN)?8:100);host.refreshSecondary();}
    lastPoll=SystemClock.elapsedRealtime();
    readerDiagnostics=b.getString("readerDiagnostics",b.getString("state","Unknown"));
    long stamp=b.getLong("last");int received=b.getInt("count");
@@ -171,7 +173,8 @@ public final class LiveAngles {
     rateStarted=rateNow;ratePolls=rateReplies=rateChanges=0;
    }
    if(received>count && stamp>0 && SystemClock.elapsedRealtime()-stamp<750){
-    count=received;angle=b.getFloat("angle");last=stamp;
+    float next=b.getFloat("angle");if(Float.compare(next,angle)!=0)angleChangedAt=SystemClock.elapsedRealtime();
+    count=received;angle=next;last=stamp;
     for(Listener l:new ArrayList<>(listeners))l.angle(angle,stamp*1000000L);
    }
    android.view.Display currentDisplay=context.getSystemService(android.hardware.display.DisplayManager.class).getDisplay(0);
@@ -181,14 +184,14 @@ public final class LiveAngles {
    if(SystemClock.elapsedRealtime()>=statusFormatAt){statusFormatAt=SystemClock.elapsedRealtime()+250;status=(fresh()?String.format(Locale.US,"LIVE %.0f° (closed ≤%.0f°)",b.getFloat("rawAngle"),context.getSharedPreferences("standalone",0).getFloat("closed_threshold",2f)):"Waiting for fresh wallpaper angles")+" · "+received+" replies · "+b.getInt("unique")+" distinct · UID "+b.getInt("uid");}
    roundTripMs=SystemClock.elapsedRealtime()-pollStarted;
    pollInFlight=false;
-   long delay=PollCadence.delay(on,roundTripMs,urgentPoll);urgentPoll=false;
+   long delay=PollCadence.delay(on,roundTripMs,urgentPoll,SystemClock.elapsedRealtime()-angleChangedAt,fresh()?angle:Float.NaN);urgentPoll=false;
    main.postDelayed(poll,delay);
   });}catch(Exception e){fail(e);}});
  }};
  private void fail(Exception e){main.post(()->{if(running){RecoveryLog.add("Reader error: "+e.getClass().getSimpleName());status="Reader error: "+e.getMessage();stop();}});}
  public void stop(){continuityRequest=0;HandoffFrames.clear();if(current==this)current=null;nativeInner=false;continuityNative=false;coverPreview=false;running=false;pollInFlight=false;urgentPoll=false;dualActive=false;last=0;if(status.startsWith("LIVE")||status.startsWith("Waiting")||status.startsWith("Connecting"))status="Angle reader stopped";main.removeCallbacksAndMessages(null);
   if(bound){try{Shizuku.unbindUserService(args,connection,true);}catch(Exception ignored){}bound=false;}
-  reader=null;if(thread!=null){thread.quitSafely();thread=null;}
+  reader=null;if(thread!=null){thread.quitSafely();thread=null;}mirrorWorker=null;if(mirrorThread!=null){mirrorThread.quitSafely();mirrorThread=null;}
   if(secondaryAnchor!=null){try{secondaryWm.removeViewImmediate(secondaryAnchor);}catch(Exception ignored){}secondaryAnchor=null;}
   if(anchor!=null){try{wm.removeViewImmediate(anchor);}catch(Exception ignored){}anchor=null;}
  }

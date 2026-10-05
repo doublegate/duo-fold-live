@@ -4,6 +4,8 @@ final class HandoffFadePolicy {
  static final long REVEAL_MS=180,READY_TIMEOUT_MS=900,ON_SETTLE_MS=32;
  static final int UI_DRAW=0,GLASS_COMMITTED=1,ENDPOINT_COMMITTED=2;
  static final long COMMIT_SETTLE_MS=2;
+ /** Re-check cadence when nothing is fading; fresh angles wake the tick immediately. */
+ static final long IDLE_TICK_MS=50;
  private boolean requireInnerGlass,requireCoverGlass;
  /** Fold 7 unified: the closing reveal also waits for a real cover glass frame (else it lands on the dark capture fallback). */
  void coverGlass(boolean require){requireCoverGlass=require;}
@@ -46,7 +48,7 @@ final class HandoffFadePolicy {
  /**
   * Upper bound on solid black after the destination panel turns ON. Duo draws only when a new angle
   * arrives, and on the Fold7 the wallpaper sends none for 0.3-0.5 s after a panel switch, so waiting
-  * for a confirmed destination draw held black for 190-460 ms. Reveal at ON+80 ms there instead.
+  * for a confirmed destination draw held black for 190-460 ms. Reveal at ON+40 ms there instead (no-glass path).
   */
  static long readyTimeoutFor(String model){return DeviceCompatibility.isFold7(model)?40:READY_TIMEOUT_MS;}
  /** Reveal (fade-in) length at 0% gradualness. Fold7 uses 100 ms so the switch reads as a short blink. */
@@ -65,6 +67,15 @@ final class HandoffFadePolicy {
   */
  static long openingReadyTimeoutFor(String model){return DeviceCompatibility.isFold7(model)?600:READY_TIMEOUT_MS;}
  private long openingReadyTimeout=-1;
+ static final long FRESH_WINDOW_MS=350;
+ /** Fold 7: the first post-switch capture alone takes up to ~400 ms, so upstream's 350 ms rejects real frames. */
+ static long freshWindowFor(String model){return DeviceCompatibility.isFold7(model)?700:FRESH_WINDOW_MS;}
+ private long freshWindow=FRESH_WINDOW_MS;
+ void freshWindow(long ms){freshWindow=ms>=100&&ms<=2000?ms:FRESH_WINDOW_MS;}
+ /** Closing (destination = cover) cap when waiting for cover glass; the cover draws faster than the inner. */
+ static long closingReadyTimeoutFor(String model){return DeviceCompatibility.isFold7(model)?300:READY_TIMEOUT_MS;}
+ private long closingReadyTimeout=-1;
+ void closingReadyTimeout(long ms){closingReadyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:-1;}
  void openingReadyTimeout(long ms){openingReadyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:-1;}
  private float innerBlack=DEFAULT_INNER_BLACK,coverBlack=DEFAULT_COVER_BLACK;
  void blackAngles(float inner,float cover){
@@ -87,18 +98,20 @@ final class HandoffFadePolicy {
    if(reveal<0){
     if((inner&&requireInnerGlass)||(!inner&&requireCoverGlass)){
      boolean committed=drawnInner==inner&&drawn>=onSince&&drawn<=now;
-     boolean freshContent=committed&&captured>=onSince&&captured<=drawn&&now-captured<=350;
+     // captured is the capture START; captured>=onSince guarantees post-ON destination content. Window per device.
+     boolean freshContent=committed&&captured>=onSince&&captured<=drawn&&now-captured<=freshWindow;
      boolean glass=freshContent&&kind==GLASS_COMMITTED;
-     boolean endpoint=inner&&freshContent&&kind==ENDPOINT_COMMITTED&&angle>=openThreshold;
+     // Inner: fully open clear on fresh content. Cover: closed clear (native screen is the destination).
+     boolean endpoint=kind==ENDPOINT_COMMITTED&&(inner?freshContent&&angle>=openThreshold:committed);
      if(readyAt<0){
-      if(glass||endpoint){readyAt=drawn;readiness=glass?"fresh content capture + glass frame committed":"fresh content capture + fully-open clear committed";}
+      if(glass||endpoint){readyAt=drawn;readiness=glass?"fresh content capture + glass frame committed":(inner?"fresh content capture + fully-open clear committed":"closed cover clear committed");}
       else readiness="waiting for fresh content capture + glass commit";
      }
      if(readyAt>=0&&now-readyAt>=COMMIT_SETTLE_MS)reveal=now;
     }else if(now-onSince>=ON_SETTLE_MS&&drawnInner==inner&&drawn>=onSince+ON_SETTLE_MS){reveal=now;readiness="destination draw";}
     // Emergency escape is not evidence of readiness. Keep a bounded recovery
     // instead of leaving the user's display black after a renderer failure.
-    long limit=openingReadyTimeout>0&&(inner||requireCoverGlass)?openingReadyTimeout:readyTimeout;
+    long limit=inner?(openingReadyTimeout>0?openingReadyTimeout:readyTimeout):(requireCoverGlass?(closingReadyTimeout>0?closingReadyTimeout:openingReadyTimeout>0?openingReadyTimeout:readyTimeout):readyTimeout);
     if(reveal<0&&now-onSince>=limit){reveal=now;readiness=limit<READY_TIMEOUT_MS?"reveal cap at ON+"+limit+" ms; destination readiness NOT confirmed":"TIMEOUT recovery; readiness NOT confirmed";}
    }
    if(reveal<0)return 1;

@@ -207,11 +207,32 @@ public class HandoffFadePolicyTest {
   assertEquals(.5f,p.opacity(310,false,94,true,true,250,false,g,240),.001);
  }
  @Test public void fold7ClosingCoverGlassStillHasBoundedEscape(){
-  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.settings(0,0);p.renderer(true,172);p.coverGlass(true);
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.closingReadyTimeout(300);p.settings(0,0);p.renderer(true,172);p.coverGlass(true);
   p.opacity(0,true,94,true,true,-1,true);
   p.opacity(10,false,94,true,true,-1,true);
-  assertEquals(1,p.opacity(600,false,94,true,true,-1,true),0);
-  assertEquals(1,p.opacity(610,false,94,true,true,-1,true),0);                 // escape at ON+600
-  assertTrue(p.opacity(800,false,94,true,true,-1,true)<1);
+  assertEquals(1,p.opacity(300,false,94,true,true,-1,true),0);
+  assertEquals(1,p.opacity(310,false,94,true,true,-1,true),0);                 // closing escape at ON+300
+  assertTrue(p.opacity(500,false,94,true,true,-1,true)<1);
+ }
+
+ @Test public void coverEndpointAtFullCloseCountsAsReady(){
+  // Fully closed: the cover glass clears and the native screen is the destination; no capture is needed.
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.closingReadyTimeout(300);p.settings(0,0);p.renderer(true,172);p.coverGlass(true);
+  p.opacity(0,true,94,true,true,-1,true);
+  p.opacity(10,false,94,true,true,-1,true);                                    // ON at 10
+  int e=HandoffFadePolicy.ENDPOINT_COMMITTED;
+  assertEquals(1,p.opacity(90,false,0,true,true,80,false,e,-1),0);             // cover clear committed at 80
+  assertTrue(p.opacity(150,false,0,true,true,80,false,e,-1)<1);
+ }
+ @Test public void slowCaptureIsStillFreshWithinWindow(){
+  // Captures take 150-400 ms right after a switch; a frame whose capture started after ON must not be
+  // rejected as stale just because the capture itself was slow.
+  assertEquals(700,HandoffFadePolicy.freshWindowFor("SM-F966U1"));assertEquals(350,HandoffFadePolicy.freshWindowFor("SM-F971U"));
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.revealBase(100);p.settings(0,0);p.renderer(true,172);p.freshWindow(700);
+  p.opacity(0,false,101,true,true,-1,false);
+  p.opacity(10,true,101,true,true,-1,false);                                   // ON at 10
+  int g=HandoffFadePolicy.GLASS_COMMITTED;
+  assertEquals(1,p.opacity(520,true,101,true,true,510,true,g,20),0);           // captured at 20, committed at 510: 500 ms old
+  assertTrue(p.opacity(600,true,101,true,true,510,true,g,20)<1);               // accepted
  }
 }

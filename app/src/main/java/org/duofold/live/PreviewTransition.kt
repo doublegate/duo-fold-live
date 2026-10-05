@@ -79,7 +79,7 @@ internal object PreviewTransition {
   val p=Parcel.obtain();val r=Parcel.obtain();var blurred:Bitmap?=null
   try{
    p.writeInterfaceToken(PreviewExpansion.TOKEN)
-   if(code==2)p.writeInt(if(endpoint)1 else 0);if(code==2&&BuildConfig.DEBUG)android.util.Log.i("DuoReady","readiness sent to hold endpoint="+endpoint)
+   if(code==2)p.writeInt(if(endpoint)1 else 0);if(code==2&&BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoReady","readiness sent to hold endpoint="+endpoint)
    if(frame!=null){blurred=frost(frame.bitmap);p.writeTypedObject(blurred,0);p.writeTypedObject(frame.bitmap,0);p.writeLong(frame.stamp);p.writeFloat(seamOffset);p.writeInt(if(frostedReflection)1 else 0);p.writeInt(if(rightPreviewReady)1 else 0)}
    binder().transact(code,p,r,0);r.readException();return r.readString()?:"Expansion ready"
   }catch(e:Exception){remote=null;throw e}finally{blurred?.recycle();p.recycle();r.recycle()}

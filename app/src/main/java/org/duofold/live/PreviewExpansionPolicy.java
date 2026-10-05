@@ -8,7 +8,10 @@ final class PreviewExpansionPolicy {
  static float opacity(long elapsed,long readyElapsed,long fadeMs){
   if(elapsed>=1500)return 0f;
   long fadeStart=readyElapsed<0?1200:Math.max(0,readyElapsed);
-  if(fadeMs<=0)return elapsed>=fadeStart?0f:1f;
+  // Zero fade only when readiness arrived (the black reveal starts then). On the no-readiness timeout the
+  // black has long been revealed, so keep the normal cross-fade instead of a one-frame cut.
+  if(fadeMs<=0&&readyElapsed>=0)return elapsed>=fadeStart?0f:1f;
+  if(fadeMs<=0)fadeMs=120;
   return Math.max(0f,Math.min(1f,1f-(elapsed-fadeStart)/(float)fadeMs));
  }
 }

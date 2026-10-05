@@ -2,13 +2,20 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id(
 android {
  namespace = "org.duofold.live"
  compileSdk = 36
- defaultConfig { applicationId = "org.duofold.live"; minSdk = 34; targetSdk = 36; versionCode = 1076; versionName = "3.5.2-a16.5" }
+ defaultConfig { applicationId = "org.duofold.live"; minSdk = 34; targetSdk = 36; versionCode = 1078; versionName = "3.5.2-a16.7" }
  val releaseKey = System.getenv("DUO_KEYSTORE")
  signingConfigs { if (releaseKey != null) create("standalone") {
   storeFile=file(releaseKey); storePassword=System.getenv("DUO_STORE_PASSWORD")
   keyAlias=System.getenv("DUO_KEY_ALIAS"); keyPassword=System.getenv("DUO_KEY_PASSWORD")
  } }
- buildTypes { getByName("release") { isMinifyEnabled=false; isShrinkResources=false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt")); if (releaseKey != null) signingConfig=signingConfigs.getByName("standalone") } }
+ buildTypes {
+  getByName("release") { isMinifyEnabled=false; isShrinkResources=false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt")); if (releaseKey != null) signingConfig=signingConfigs.getByName("standalone"); buildConfigField("boolean","DIAGNOSTICS","false") }
+  getByName("debug") { buildConfigField("boolean","DIAGNOSTICS","true") }
+  // Release-optimized, non-debuggable build with the change-only diagnostic logs, signed with the local debug
+  // key so it updates an installed debug build in place (settings, accessibility and Shizuku grants survive).
+  // Debug builds run Compose noticeably slower; judge animation smoothness on this variant.
+  create("fold7test") { initWith(getByName("release")); signingConfig=signingConfigs.getByName("debug"); isDebuggable=false; matchingFallbacks += listOf("release"); buildConfigField("boolean","DIAGNOSTICS","true") }
+ }
  buildFeatures { compose=true; buildConfig=true }
  compileOptions { sourceCompatibility=JavaVersion.VERSION_17; targetCompatibility=JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget="17" }

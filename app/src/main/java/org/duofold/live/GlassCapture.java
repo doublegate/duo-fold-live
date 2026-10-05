@@ -37,7 +37,7 @@ final class GlassCapture extends Binder {
     result.putString("previous",previous);result.putString("value",observed);result.putBoolean("ok",true);
    }else if(code==1 || code==3){
     long captureStarted=SystemClock.elapsedRealtime();
-    int n=data.readInt();if(n<0||n>4||(n==0&&code!=1))throw new IllegalArgumentException("No valid overlay exclusion surfaces");  // n==0: post-switch pre-capture before the new overlay exists
+    int n=data.readInt();if(n<1||n>4)throw new IllegalArgumentException("No valid overlay exclusion surfaces");
     excluded=new SurfaceControl[n];for(int i=0;i<n;i++)excluded[i]=data.readTypedObject(SurfaceControl.CREATOR);
     int displayId=code==1&&data.dataAvail()>=4?data.readInt():0;
     if(displayId<0||displayId>1)throw new IllegalArgumentException("Unsupported capture display");

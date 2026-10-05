@@ -142,7 +142,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
     private fun updateDisplay(){
         if(view==null)return
         val display=displays.getDisplay(0)?:return
-        if(physicalKey(display)!=primaryKey){RecoveryLog.add("Primary physical panel changed; rebuilding overlay");restart();if(DeviceCompatibility.isFold7(android.os.Build.MODEL)&&UnifiedRenderer.enabled())GlassFrames.precapture();return}
+        if(physicalKey(display)!=primaryKey){RecoveryLog.add("Primary physical panel changed; rebuilding overlay");restart();return}
         val next=Configuration(windowContext!!.resources.configuration)
         val bounds=wm.currentWindowMetrics.bounds
         if(screenWidth!=bounds.width()||screenHeight!=bounds.height()){

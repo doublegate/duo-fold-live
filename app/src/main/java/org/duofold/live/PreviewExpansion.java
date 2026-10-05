@@ -105,6 +105,7 @@ final class PreviewExpansion extends Binder {
   if(layer==null)layer=new SurfaceControl.Builder().setName("Duo clean right hold").setBufferSize(bitmap.getWidth(),bitmap.getHeight()).setOpaque(true).setHidden(true).build();
   if(holdBlur==null){try{SurfaceControl.Builder hb=new SurfaceControl.Builder().setName("Duo hold blur").setHidden(true);
    SurfaceControl.Builder.class.getMethod("setEffectLayer").invoke(hb);holdBlur=hb.build();
+   try(SurfaceControl.Transaction ht=new SurfaceControl.Transaction()){RecordVisible.hide(ht,holdBlur);ht.apply();}
    holdBlurRadius=SurfaceControl.Transaction.class.getMethod("setBackgroundBlurRadius",SurfaceControl.class,int.class);}catch(Exception e){holdBlur=null;holdBlurRadius=null;}}
   holdRadius=holdBlurProp();unified=UnifiedRenderer.enabled();
   if(backdrop==null)backdrop=new SurfaceControl.Builder().setName("Duo reflected left handoff copy").setBufferSize(bitmap.getWidth(),bitmap.getHeight()).setOpaque(true).setHidden(true).build();
@@ -154,11 +155,11 @@ final class PreviewExpansion extends Binder {
    if(start==0 && (switched || coverOff)){
     if(!PreviewExpansionPolicy.fresh(stamp,now)){clear("Expansion skipped: stale prepared frame");return;}
     start=now;ready=pendingReady?0:-1;status="Holding the existing two-column layout during handoff";
-    if(BuildConfig.DEBUG)android.util.Log.i("DuoHold","hold start readyAlready="+pendingReady+" blur="+Math.round(holdRadius));
+    if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoHold","hold start readyAlready="+pendingReady+" blur="+Math.round(holdRadius));
    }
    long elapsed=start==0?0:now-start;
    float alpha=start==0?1f:PreviewExpansionPolicy.opacity(elapsed,ready,unified&&DeviceCompatibility.isFold7(android.os.Build.MODEL)?0:120);
-   if(alpha<=0){if(BuildConfig.DEBUG)android.util.Log.i("DuoHold","hold end elapsed="+elapsed+" readyAt="+ready);completed=true;clear("Prepared layout handed to inner content");return;}
+   if(alpha<=0){if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoHold","hold end elapsed="+elapsed+" readyAt="+ready);completed=true;clear("Prepared layout handed to inner content");return;}
    int stack=number(target,"layerStack"),panelState=number(target,"state");
    if(stack!=lastStack || panelState!=lastPanelState){lastStack=stack;lastPanelState=panelState;event("Inner stack="+stack+" state="+panelState);}
    int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
@@ -172,7 +173,7 @@ final class PreviewExpansion extends Binder {
     // The left copy is visible BEFORE handoff. Never hide either layer merely because
     // Android reports a transient OFF state during the physical panel remap.
     boolean record=RecordVisible.enabled();
-    if(record!=lastRecord){lastRecord=record;RecordVisible.hide(t,backdrop);RecordVisible.hide(t,layer);if(seam!=null)RecordVisible.hide(t,seam);}
+    if(record!=lastRecord){lastRecord=record;RecordVisible.hide(t,backdrop);RecordVisible.hide(t,layer);if(seam!=null)RecordVisible.hide(t,seam);if(holdBlur!=null)RecordVisible.hide(t,holdBlur);}
     t.setPosition(backdrop,0,0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady && !unified)) && leftWidth>0);
     t.setPosition(layer,leftWidth,(h-bh*fit)/2f).setAlpha(layer,alpha).setVisibility(layer,start>0);
     if(holdBlur!=null&&holdBlurRadius!=null){

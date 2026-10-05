@@ -6,7 +6,7 @@ internal class LivePanelSurface(context:Context,private val result:(Boolean,Stri
  private var id=0;private var generation=0;private var active=false;private var pending=false;private var attached=false
  private var mirrorWidth=0;private var mirrorHeight=0;private var revision=-1
  private var since=0L;private var lastWait=""
- private fun dlog(m:String){if(BuildConfig.DEBUG)android.util.Log.i("DuoMirror","+${android.os.SystemClock.elapsedRealtime()-since}ms $m")}
+ private fun dlog(m:String){if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoMirror","+${android.os.SystemClock.elapsedRealtime()-since}ms $m")}
  private val exclusionChanged=Runnable{if(active){removeCallbacks(retry);post(retry)}}
  init{holder.addCallback(this);importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS}
  private val retry:Runnable=object:Runnable{override fun run(){

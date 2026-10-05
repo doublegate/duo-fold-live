@@ -9,6 +9,10 @@ import java.util.List;
  * `adb shell setprop debug.duofold.record_visible 1` they are left visible and registered here instead,
  * and GlassCapture excludes them explicitly, so the glass still never samples its own overlays.
  * Lives in the Shizuku user-service process (HandoffFade, PreviewExpansion, InnerLiveMirror, GlassCapture).
+ * Exception: Duo's main glass surface (code 7, the display-0 FrostSurface) is always skipped, because
+ * skip-screenshot is also what keeps it out of the live cover->inner mirror; un-skipping it mirrored the
+ * cover's perspective glass onto the inner right half. Captures therefore show the native screen where the
+ * main glass is drawn (plan item B1 restores it while the mirror is not live).
  */
 final class RecordVisible {
  private RecordVisible(){}

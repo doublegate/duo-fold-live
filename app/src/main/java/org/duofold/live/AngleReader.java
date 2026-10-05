@@ -6,11 +6,11 @@ public class AngleReader extends Binder {
  public static final String DESCRIPTOR="org.duofold.live.wallpaperprobe.AngleReader";
  private GlassCapture capture;
  private PreviewExpansion expansion;
- private HandoffFade fade;
+ private volatile HandoffFade fade;
  private FoldRotationHold rotation;
  private String recoveryApk;
  private final AnimationModePolicy animationMode=new AnimationModePolicy();
- private boolean previewAllowed=false;
+ private volatile boolean previewAllowed=false;
  private final InnerLiveMirror mirror=new InnerLiveMirror();
  private final ConcurrentController concurrent=new ConcurrentController();
  private final ContinuityProbeDiagnostics continuity=new ContinuityProbeDiagnostics();
@@ -19,7 +19,20 @@ public class AngleReader extends Binder {
  private int logLines,matchingResponses,staleResponses;
  private int owner=-1,generation=0,count=0; private float angle=Float.NaN,min=180,max=0; private long last=0; private String state="Idle",raw=""; private java.lang.Process process; private final Set<Float> unique=new HashSet<>();
  public AngleReader(){attachInterface(null,DESCRIPTOR);}
- protected synchronized boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
+ // Mirror attach waits up to 250 ms for its compositor commit. Run it outside this monitor so the 4 ms
+ // angle poll (code 2), which drives the fade and the cover hold, never stalls behind it mid-transition.
+ protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
+  if(code==4||code==5){
+   data.enforceInterface(DESCRIPTOR);
+   synchronized(this){int caller=Binder.getCallingUid();if(owner<0)owner=caller;if(caller!=owner)throw new SecurityException("Wrong caller");}
+   if(code==5){mirror.detach(data.readInt());reply.writeNoException();return true;}
+   int id=data.readInt();android.view.SurfaceControl parent=data.readTypedObject(android.view.SurfaceControl.CREATOR);int w=data.readInt(),h=data.readInt();
+   Bundle result=mirror.attach(id,parent,w,h,previewAllowed);HandoffFade f=fade;if(result.getBoolean("ok")&&f!=null)f.mirrorSubmitted();
+   reply.writeNoException();reply.writeBundle(result);return true;
+  }
+  synchronized(this){return locked(code,data,reply,flags);}
+ }
+ private boolean locked(int code,Parcel data,Parcel reply,int flags)throws RemoteException {
   if(code==INTERFACE_TRANSACTION){reply.writeString(DESCRIPTOR);return true;}
   if(code==16777115){FoldRotationHold pending=rotation;stop();if(pending!=null)pending.awaitRelease();System.exit(0);return true;}
   data.enforceInterface(DESCRIPTOR);
@@ -30,7 +43,10 @@ public class AngleReader extends Binder {
    try{
     if(sc==null || !sc.isValid())throw new IllegalStateException("Animation surface unavailable");
     try(android.view.SurfaceControl.Transaction t=new android.view.SurfaceControl.Transaction()){
-     RecordVisible.hide(t,sc);t.apply();
+     // Always skip, even in record-visible diagnostics: skip-screenshot is also what keeps this cover
+     // animation out of the live cover->inner mirror. Un-skipping it (record_visible=1) mirrored the cover's
+     // full-panel perspective glass onto the inner right half during every capture run.
+     android.view.SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",android.view.SurfaceControl.class,boolean.class).invoke(t,sc,true);t.apply();
     }
     reply.writeNoException();reply.writeString("Cover animation excluded from mirrors");
    }catch(Exception e){throw new IllegalStateException("Could not exclude animation",e);}
@@ -40,8 +56,6 @@ public class AngleReader extends Binder {
   if(code==9){boolean inner=data.readInt()!=0;long when=data.readLong();int kind=data.dataAvail()>=4?data.readInt():0;long captured=data.dataAvail()>=8?data.readLong():-1;if(fade!=null)fade.drawn(inner,when,kind,captured);reply.writeNoException();return true;}
   if(code==8){if(expansion==null)expansion=new PreviewExpansion(caller);reply.writeNoException();reply.writeStrongBinder(expansion);return true;}
   if(code==6){if(capture==null)capture=new GlassCapture(caller);reply.writeNoException();reply.writeStrongBinder(capture);return true;}
-  if(code==4){int id=data.readInt();android.view.SurfaceControl parent=data.readTypedObject(android.view.SurfaceControl.CREATOR);int w=data.readInt(),h=data.readInt();Bundle result=mirror.attach(id,parent,w,h,previewAllowed);if(result.getBoolean("ok")&&fade!=null)fade.mirrorSubmitted();reply.writeNoException();reply.writeBundle(result);return true;}
-  if(code==5){mirror.detach(data.readInt());reply.writeNoException();return true;}
   if(code==1){String action=data.readString();if(action==null||!action.matches("org\\.duofold\\.live\\.wallpaperprobe\\.READ_[0-9]+"))throw new IllegalArgumentException("Invalid action");recoveryApk=data.readString();start(action);reply.writeNoException();return true;}
   if(code==2){heartbeat=SystemClock.elapsedRealtime();boolean unlocked=data.readInt()!=0,dual=data.readInt()!=0,primaryInner=data.readInt()!=0,secondaryReady=data.readInt()!=0;int frozenSource=data.readInt();float openThreshold=data.readFloat();boolean live=data.readInt()!=0;boolean appEnabled=data.readInt()!=0;float closedThreshold=FoldThreshold.sanitizeClosed(data.readFloat());float effectiveAngle=FoldThreshold.effectiveAngle(angle,closedThreshold);long probeRequest=data.dataAvail()>=8?data.readLong():0;
    float fadeSmoothing=data.dataAvail()>=4?data.readFloat():FadeSettings.DEFAULT_SMOOTHING;
@@ -64,9 +78,9 @@ public class AngleReader extends Binder {
    if(handoff.probeHolding()&&fade!=null)fade.update(false,effectiveAngle,false);
    if(expansion!=null&&handoff.probeHolding())expansion.enabled(false);
    previewAllowed=mirrorMode&&effectAllowed&&!handoff.probeNative()&&CoverPreviewPolicy.allowed(live,dual,primaryInner,unlocked,handoff.active());
-   if(!previewAllowed)mirror.close();
+   if(!previewAllowed)mirror.revoke();
    continuity.sample(handoff.probeHolding(),handoff.probeStatus());
-   Bundle b=new Bundle();b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putBoolean("effectAllowed",effectAllowed);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",expansion==null?"No bridge":expansion.trace);b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putLong("switchedAt",fade==null?0:fade.switchedAt);b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);b.putString("raw",raw);reply.writeNoException();reply.writeBundle(b);return true;}
+   Bundle b=new Bundle();b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putBoolean("effectAllowed",effectAllowed);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",expansion==null?"No bridge":expansion.trace);b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);b.putString("raw",raw);reply.writeNoException();reply.writeBundle(b);return true;}
   if(code==3){stop();reply.writeNoException();return true;}return super.onTransact(code,data,reply,flags);
  }
  private synchronized void stop(){previewAllowed=false;if(rotation!=null){rotation.close();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.close();concurrent.release();handoff.release();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
