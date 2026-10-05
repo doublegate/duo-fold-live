@@ -36,6 +36,17 @@ Performance and robustness (all models)
   reader monitor and on its own IPC thread), bounded `settings` subprocesses, rotation-hold hand-over after a restart,
   Shizuku destroy waiting outside the monitor, blur ticker reset on its own thread.
 
+Review fixes (PR #18 review)
+- Only the Fold 7 unified path gets the new blur: the preview's progressive blur and the hold blur exist only for the
+  unified half-pane layout, the post-switch right-half blur also requires `UnifiedRenderer.enabled()`, and the hold
+  uses the half-pane layout only when both panels are upright. Fold 8 and non-unified sessions keep their visuals.
+- The 600 ms opening cap applies only when inner glass is required; the no-glass path keeps the short draw cap.
+- Hold readiness uses the per-model fresh window, so the hold drops on the frame that starts the reveal.
+- `AngleParser` token cache published as one immutable snapshot; `ConcurrentController` reopening escape requires a
+  fresh sample; a direct-mode state change resets the release deferral; dual-mode toggles start the incoming
+  controller only after the outgoing override released; a live-mirror attach re-checks its ticket after unlocking;
+  `DuoGlass.sourceSize` clears the reused size first.
+
 Diagnostics
 - `fold7test` build type (release-optimized, debug-signed, diagnostic logs) and `BuildConfig.DIAGNOSTICS` for the
   `Duo*` log tags; `debug.duofold.record_visible`, `preview_blur_*`, `right_blur_clear`, `reflect_max_hinge`,

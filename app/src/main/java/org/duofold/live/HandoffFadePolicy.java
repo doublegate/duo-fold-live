@@ -114,9 +114,10 @@ final class HandoffFadePolicy {
      }
      if(readyAt>=0&&now-readyAt>=COMMIT_SETTLE_MS)reveal=now;
     }else if(now-onSince>=ON_SETTLE_MS&&drawnInner==inner&&drawn>=onSince+ON_SETTLE_MS){reveal=now;readiness="destination draw";}
+    // The long opening cap waits for inner GLASS; the no-glass path keeps the short destination-draw cap.
     // Emergency escape is not evidence of readiness. Keep a bounded recovery
     // instead of leaving the user's display black after a renderer failure.
-    long limit=inner?(openingReadyTimeout>0?openingReadyTimeout:readyTimeout):(requireCoverGlass?(closingReadyTimeout>0?closingReadyTimeout:openingReadyTimeout>0?openingReadyTimeout:readyTimeout):readyTimeout);
+    long limit=inner?(requireInnerGlass&&openingReadyTimeout>0?openingReadyTimeout:readyTimeout):(requireCoverGlass?(closingReadyTimeout>0?closingReadyTimeout:openingReadyTimeout>0?openingReadyTimeout:readyTimeout):readyTimeout);
     if(reveal<0&&now-onSince>=limit){reveal=now;readiness=limit<READY_TIMEOUT_MS?"reveal cap at ON+"+limit+" ms; destination readiness NOT confirmed":"TIMEOUT recovery; readiness NOT confirmed";}
    }
    if(reveal<0)return 1;

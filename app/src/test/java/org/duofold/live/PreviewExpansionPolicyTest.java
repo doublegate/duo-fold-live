@@ -38,4 +38,11 @@ public class PreviewExpansionPolicyTest {
   assertEquals(0f,PreviewExpansionPolicy.opacity(1320,-1,0),1e-6);
   assertEquals(0f,PreviewExpansionPolicy.opacity(400,300,0),1e-6);   // with readiness: dropped at once
  }
+ // Review (PR #18): hold readiness accepts the same per-model window the reveal uses; preparation keeps 500 ms.
+ @Test public void readinessWindowMatchesTheRevealWindow(){
+  assertFalse(PreviewExpansionPolicy.fresh(1000,1600));
+  assertTrue(PreviewExpansionPolicy.fresh(1000,1600,700));
+  assertFalse(PreviewExpansionPolicy.fresh(1000,1701,700));
+  assertFalse(PreviewExpansionPolicy.fresh(0,100,700));
+ }
 }

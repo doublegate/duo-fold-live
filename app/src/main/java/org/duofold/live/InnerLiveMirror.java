@@ -55,7 +55,7 @@ final class InnerLiveMirror {
  /** halfPane (unified renderer, plan B3): fill exactly the right half so the pane boundary matches the post-switch glass. */
  Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed,boolean halfPane,int ticket){
   lock.lock();
-  long identity=Binder.clearCallingIdentity();Bundle result=new Bundle();
+  long identity=Binder.clearCallingIdentity();Bundle result=new Bundle();SurfaceControl built=null;
   try{
    close();
    if(!allowed||parent==null||!parent.isValid())throw new IllegalStateException("Cover mirror not currently eligible");
@@ -74,7 +74,8 @@ final class InnerLiveMirror {
    float[] fit=halfPane?LiveMirrorLayout.rightHalf(sw,sh,width,height):LiveMirrorLayout.fit(sw,sh,width,height);
    blurStart=BlurTuning.start();blurMax=BlurTuning.max();
    blurEnd=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1];blurTau=BlurTuning.smoothMs();
-   try{
+   // Unified half-pane preview only (Fold 7 tuning); every other path keeps its original sharp preview.
+   if(halfPane)try{
     SurfaceControl.Builder b=new SurfaceControl.Builder().setName("Duo preview progressive blur");
     SurfaceControl.Builder.class.getMethod("setEffectLayer").invoke(b);
     blur=b.build();
@@ -96,9 +97,14 @@ final class InnerLiveMirror {
    if(!gate.valid(ticket))throw new IllegalStateException("Preview revoked during attach");
    if(blur!=null)tick.post(resetAndStart);
    if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoBlur","attach blur="+(blur!=null)+" setter="+(blurRadius!=null)+" max="+blurMax+" start="+blurStart+" end="+blurEnd+" tau="+blurTau);
-   owner=id;status="Live cover → inner preview (right aligned; normal handoff)"+(blur!=null?"; progressive blur "+Math.round(blurMax)+" px from "+Math.round(blurStart)+"° to "+Math.round(blurEnd)+"°":"; progressive blur unavailable");result.putBoolean("ok",true);
+   built=mirror;owner=id;status="Live cover → inner preview (right aligned; normal handoff)"+(blur!=null?"; progressive blur "+Math.round(blurMax)+" px from "+Math.round(blurStart)+"° to "+Math.round(blurEnd)+"°":"; progressive blur unavailable");result.putBoolean("ok",true);
   }catch(Exception e){close();Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();status="Cover mirror unavailable: "+cause.getClass().getSimpleName()+": "+cause.getMessage();}
   finally{if(parent!=null)parent.release();Binder.restoreCallingIdentity(identity);lock.unlock();}
+  // A revoke between the check above and the unlock finds the lock held, so its tryLock skips the close. Re-check
+  // after unlocking: either revoke saw the lock free and closed, or the bumped generation is visible here.
+  if(built!=null&&!gate.valid(ticket)){
+   lock.lock();try{if(mirror==built){close();status="Preview revoked during attach";result.putBoolean("ok",false);}}finally{lock.unlock();}
+  }
   result.putString("status",status);return result;
  }
  void detach(int id){lock.lock();try{if(owner==id)close();}finally{lock.unlock();}}
