@@ -80,6 +80,16 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | Base-state query rate | at most every 16 ms, after the cheap escapes | Runs on the 4 ms poll under the reader lock during a defer. |
 | Closing-mirror mask bound | 1.8 s after the secondary panel is gone | It stayed active for as long as the phone was closed. |
 
+**Known trade-off of the close-release gate (measured 2026-10-05, Perfetto, a16.16).** While the cover override
+(CONCURRENT_OUTER, state 5) is held during a close, Android powers the inner panel back on about 140 ms after the
+switch, as the secondary display. The gated release then powers it off again about 1.3 s later, when base CLOSED
+arrives. Each panel power change is a Qualcomm composer `SetPowerMode` call of 150-260 ms during which
+SurfaceFlinger composes no display. The last one lands after the phone is closed, so it can show as a brief
+(~150 ms) stall on the cover. Releasing earlier, at base HALF_OPENED, avoids that stall but takes the 5->2->0
+sleep path that blanks the cover, which is the bug the gate fixes. If the cover hitches right after closing,
+this is the likely cause; avoiding the inner re-power during the hold would need a different device-state
+approach and an on-device A/B.
+
 ## Angle polling (`PollCadence`, `LiveAngles`) — all models
 
 | Value | Setting | Why |
