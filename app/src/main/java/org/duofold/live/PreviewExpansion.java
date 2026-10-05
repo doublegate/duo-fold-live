@@ -184,7 +184,8 @@ final class PreviewExpansion extends Binder {
    int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
    // Unified Fold 7 (plan B3/B4): same right-half layout and uniform scale as the live mirror and the strip, so the
    // pane boundary sits at w/2 before the switch, during this hold and after it.
-   boolean half=unified&&DeviceCompatibility.isFold7(android.os.Build.MODEL);
+   // Both panels upright, like SecondaryShade: a rotated panel keeps the fitted layout the preview used (review on PR #18).
+   boolean half=unified&&DeviceCompatibility.isFold7(android.os.Build.MODEL)&&(primary==null||number(primary,"rotation")==0)&&(secondary==null||number(secondary,"rotation")==0);
    float fit=half?LiveMirrorLayout.rightHalf(bw,bh,w,h)[0]:Math.min(w/(float)bw,h/(float)bh);
    float leftWidth=half?w/2f:Math.max(0f,w-bw*fit);
    float holdTop=(h-bh*fit)/2f;
@@ -205,7 +206,7 @@ final class PreviewExpansion extends Binder {
      SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,holdBlur,stack);
      float top=(h-bh*fit)/2f;
      t.setLayer(holdBlur,Integer.MAX_VALUE-19).setCrop(holdBlur,new android.graphics.Rect(Math.round(leftWidth),Math.round(top),Math.round(leftWidth+bw*fit),Math.round(top+bh*fit)))
-      .setPosition(holdBlur,0,0).setAlpha(holdBlur,alpha).setVisibility(holdBlur,start>0);
+      .setPosition(holdBlur,0,0).setAlpha(holdBlur,alpha).setVisibility(holdBlur,start>0&&half);  // unified Fold 7 half-pane hold only
      holdBlurRadius.invoke(t,holdBlur,Math.round(holdRadius));
     }
     if(seam!=null){

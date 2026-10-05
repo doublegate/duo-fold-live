@@ -254,4 +254,14 @@ public class HandoffFadePolicyTest {
   assertEquals(1,p.opacity(170,false,94,true,true,161,false,glass,155),0);              // reveal starts (0 % yet)
   assertTrue(p.opacity(220,false,94,true,true,161,false,glass,155)<1f);                 // and progresses
  }
+ // Review (PR #18): the long opening cap is for waiting on inner GLASS; the no-glass path (Classic, debug) keeps the
+ // short destination-draw cap instead of holding black for 600 ms.
+ @Test public void openingCapAppliesOnlyWhenInnerGlassIsRequired(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.closingReadyTimeout(380);p.settings(0,0);p.renderer(false,172);p.coverGlass(true);
+  p.opacity(0,false,90,true,true,-1,false);                       // cover primary
+  assertEquals(1,p.opacity(10,true,101,true,false,-1,false),0);   // switched to inner, OFF
+  assertEquals(1,p.opacity(20,true,101,true,true,-1,false),0);    // inner ON at 20
+  p.opacity(60,true,101,true,true,-1,false);                      // ON+40: cap reached on the no-glass path
+  assertTrue(p.opacity(120,true,101,true,true,-1,false)<1f);      // revealing long before ON+600
+ }
 }

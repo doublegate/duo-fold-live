@@ -87,7 +87,10 @@ public class AngleReader extends Binder {
    boolean needsBridge=mirrorMode && live && !dual && unlocked && appEnabled && handoff.active() && !handoff.probeHolding() && angle>=HandoffPolicy.RELEASE_ANGLE && angle<FoldThreshold.sanitize(openThreshold) && last>0 && heartbeat-last<750 && expansion!=null;
    if(needsBridge)bridgeReady=expansion.holdBeforeRelease();else if(expansion!=null)expansion.cancelReleaseWait();
    boolean wasCoverHeld=handoff.active();
-   if(!effectAllowed){handoff.releaseGated(effectiveAngle,last>0&&heartbeat-last<750);concurrent.releaseGated(effectiveAngle);}else if(dual){handoff.releaseGated(effectiveAngle,last>0&&heartbeat-last<750);concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold);}else{concurrent.releaseGated(effectiveAngle);if(bridgeReady)handoff.update(effectiveAngle,last>0&&heartbeat-last<750,unlocked,live&&appEnabled,openThreshold,probeRequest);}
+   boolean freshAngle=last>0&&heartbeat-last<750;
+   // Mode switches: the incoming controller starts only once the outgoing one has actually released. A gated release
+   // can still be deferring, and starting the other override meanwhile is rejected as an existing override.
+   if(!effectAllowed){handoff.releaseGated(effectiveAngle,freshAngle);concurrent.releaseGated(effectiveAngle,freshAngle);}else if(dual){handoff.releaseGated(effectiveAngle,freshAngle);if(!handoff.active())concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold);}else{concurrent.releaseGated(effectiveAngle,freshAngle);if(bridgeReady&&!concurrent.active())handoff.update(effectiveAngle,freshAngle,unlocked,live&&appEnabled,openThreshold,probeRequest);}
    if(wasCoverHeld && !handoff.active() && expansion!=null)expansion.releaseReturned();
    if(handoff.probeHolding()&&fade!=null)fade.update(false,effectiveAngle,false);
    if(expansion!=null&&handoff.probeHolding())expansion.enabled(false);

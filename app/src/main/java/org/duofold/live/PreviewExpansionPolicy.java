@@ -1,7 +1,9 @@
 package org.duofold.live;
 /** Timing is independent of hinge thresholds; it runs only after a physical-panel handoff. */
 final class PreviewExpansionPolicy {
- static boolean fresh(long stamp,long now){return stamp>0 && now>=stamp && now-stamp<=500;}
+ static boolean fresh(long stamp,long now){return fresh(stamp,now,500);}
+ /** Hold readiness uses the reveal's per-model window (HandoffFadePolicy.freshWindowFor) so both agree on a frame. */
+ static boolean fresh(long stamp,long now,long window){return stamp>0 && now>=stamp && now-stamp<=window;}
  static float progress(long elapsed){float t=Math.max(0f,Math.min(1f,elapsed/240f));return 1f-(1f-t)*(1f-t)*(1f-t);}
  static float opacity(long elapsed,long readyElapsed){return opacity(elapsed,readyElapsed,120);}
  /** fadeMs 0 drops the hold at readiness (Fold 7 unified: the black reveal starts then, so a cross-fade double-exposes). */

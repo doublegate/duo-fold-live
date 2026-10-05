@@ -100,10 +100,12 @@ internal object PreviewTransition {
    main.post{pending=false;if(gen==serial)status=note}
   }
  }
+ // Same window HandoffFadePolicy uses to start the reveal on this frame; the pre-switch preparation keeps 500 ms.
+ private val readyWindow=HandoffFadePolicy.freshWindowFor(Build.MODEL)
  fun innerFrameSubmitted(frame:GlassFrame?){
   if(!active || wasCover || readySent || frame==null)return
   if(minOf(frame.width,frame.height).toFloat()/maxOf(frame.width,frame.height)<=.7f ||
-     !PreviewExpansionPolicy.fresh(frame.stamp,SystemClock.elapsedRealtime()))return
+     !PreviewExpansionPolicy.fresh(frame.stamp,SystemClock.elapsedRealtime(),readyWindow))return
   readySent=true
   executor.execute{runCatching{send(2)}.onSuccess{note->main.post{status=note}}.onFailure{main.post{readySent=false}}}
  }

@@ -331,7 +331,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  // strip mirrors the cover (display 0); every other surface draws the panel it is on (plan B8).
  private fun sourceDisplay()=if(reflectedCover)0 else (display?.displayId ?: 0)
  private val scratchSize=Point()
- private fun sourceSize(out:Point):Point{context.getSystemService(DisplayManager::class.java).getDisplay(sourceDisplay())?.getRealSize(out);return out}
+ private fun sourceSize(out:Point):Point{out.set(0,0);context.getSystemService(DisplayManager::class.java).getDisplay(sourceDisplay())?.getRealSize(out);return out}
  private fun ownsLiveCapture()=!reflectedCover && !frozen && (display?.displayId ?: 0)==0
  override fun surfaceCreated(h:SurfaceHolder){
   if(!preview){

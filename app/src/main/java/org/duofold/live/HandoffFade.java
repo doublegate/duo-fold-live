@@ -36,7 +36,8 @@ final class HandoffFade {
  void settings(float smoothing,float gradualness,boolean requireGlass,float open){this.smoothing=smoothing;this.gradualness=gradualness;requireInnerGlass=requireGlass;openThreshold=open;}
  private volatile boolean idle;private volatile long lastMovedAt;
  // Right-half blur continuity (RightHalfBlur): one effect layer on the inner panel while it is primary.
- private static final boolean RIGHT_BLUR=DeviceCompatibility.isFold7(Build.MODEL);
+ // Fold 7 unified renderer only: debug.duofold.unified=0 must leave the original path without this blur (review on PR #18).
+ private final boolean rightBlurEnabled=DeviceCompatibility.isFold7(Build.MODEL)&&UnifiedRenderer.enabled();
  private SurfaceControl rightBlur;private Method effectLayer,blurRadius;
  // Max, glide and clear angle come from BlurTuning (shared with the mirror and the hold, 1 s cache).
  private float blurShown=Float.NaN,blurSwitch=101;private long blurAt;private int blurApplied=-1,blurStack=-1;private String blurCrop="";
@@ -146,7 +147,7 @@ final class HandoffFade {
  /** Glides the right-half blur toward RightHalfBlur.radius at display rate; true when the transaction changed. */
  private boolean rightHalfBlur(SurfaceControl.Transaction t,long now,boolean inner,Object p)throws Exception{
   boolean upright=inner&&value(p,"rotation")==0;
-  boolean wanted=RIGHT_BLUR&&requireInnerGlass&&effectLayer!=null&&upright;
+  boolean wanted=rightBlurEnabled&&requireInnerGlass&&effectLayer!=null&&upright;
   // Cover primary (closed side), rotated, or disabled: drop to 0 at once and never follow the primary
   // display onto the cover; the mirror's own blur takes over on the inner panel.
   if(!wanted){

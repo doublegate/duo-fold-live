@@ -17,10 +17,11 @@ final class ConcurrentController {
  // base state is CLOSED goes 5->2->0 (sleep). Inner (4) sessions end at open/endpoint and stay ungated.
  private volatile boolean screenOn=true;private final ReleaseDeferral deferral=new ReleaseDeferral();
  void screen(boolean on){screenOn=on;}
- private boolean deferOuter(float angle){
+ private boolean deferOuter(float angle,boolean fresh){
   long now=SystemClock.elapsedRealtime();
   boolean outer=owned!=null&&!primaryInner;
-  boolean reopening=Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
+  // Only a FRESH sample proves reopening: a stale 100 deg reading says nothing about a hinge still closing.
+  boolean reopening=fresh&&Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
   boolean was=deferral.deferring();
   if(!deferral.keep(now,outer,screenOn,reopening,BaseDeviceState::closed))return false;
   if(!was&&BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","dual: defer outer release (angle="+angle+")");
@@ -71,10 +72,10 @@ final class ConcurrentController {
  synchronized void update(float angle,boolean fresh,boolean unlocked,boolean primaryIsInner,boolean secondaryReady,int frozenSource,float openThreshold){
   long token=Binder.clearCallingIdentity();long now=SystemClock.elapsedRealtime();
   try{
-   if(!unlocked){if(deferOuter(angle))return;releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;return;}
+   if(!unlocked){if(deferOuter(angle,fresh))return;releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;return;}
    if(!fresh){
     if(bootstrapping && owned!=null && now-started<3500)return;
-    if(deferOuter(angle))return;
+    if(deferOuter(angle,false))return;
     releaseInternal();bootstrapping=false;
     status="Waiting for fresh angle and outgoing capture";
     return;
@@ -82,7 +83,7 @@ final class ConcurrentController {
    bootstrapping=false;
    if(FoldThreshold.endpoint(angle,openThreshold)){
     if(endpointSince==0)endpointSince=now;
-    if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(deferOuter(angle))return;releaseInternal();blocked=false;}return;
+    if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(deferOuter(angle,true))return;releaseInternal();blocked=false;}return;
    }
    endpointSince=0;deferral.reset();
    if(owned==null){if(!blocked&&FoldThreshold.canStart(angle,openThreshold)){if(FreezePolicy.canSwitch(primaryIsInner,frozenSource))begin(FreezePolicy.targetInner(frozenSource),now);else status="Waiting for outgoing frame before switching displays";}return;}
@@ -98,7 +99,7 @@ final class ConcurrentController {
  }
  synchronized void release(){long token=Binder.clearCallingIdentity();try{releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;}finally{Binder.restoreCallingIdentity(token);}}
  /** External release (effect disallowed, dual mode turned off): the outer session waits for CLOSED (plan A6). */
- synchronized void releaseGated(float angle){if(deferOuter(angle))return;release();}
+ synchronized void releaseGated(float angle,boolean fresh){if(deferOuter(angle,fresh))return;release();}
  /** Teardown: bounded wait for CLOSED before cancelling an outer session (plan A3). */
  synchronized void releaseForTeardown(){
   long start=SystemClock.elapsedRealtime();

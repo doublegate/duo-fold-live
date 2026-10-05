@@ -1,3 +1,33 @@
+## 3.5.2-a16.16 — Review fixes from the upstream pull requests (fork)
+
+Fixes for the automated review of upstream PRs #17 and #18 (joeconsorti/duo-fold-live). Verified by unit tests and the
+lint/build gates; not yet re-checked on the device.
+
+- `AngleParser`: the per-action token cache is one immutable snapshot published through a volatile field. Two
+  overlapping reader threads after a restart could pair one action's name with another action's tokens and reject
+  every sample until the next restart.
+- `CoverHandoff.changeState` resets the release deferral, so a new direct-mode hold never inherits an expired 3 s
+  window from an earlier close and releases before base CLOSED.
+- `ConcurrentController`: the reopening escape requires a fresh sample (`deferOuter(angle,fresh)`,
+  `releaseGated(angle,fresh)`), as `CoverHandoff` already did. A stale 100 deg reading no longer releases state 5 at
+  base HALF_OPENED.
+- `AngleReader`: on a dual-mode toggle the incoming controller starts only after the outgoing override has actually
+  released; starting it while the gated release was still deferring was refused as an existing override.
+- `DuoGlass.sourceSize` clears the reused size before the display lookup; an absent source display left stale
+  dimensions that let an old frame pass `usable()`.
+- **All models but the Fold 7 unified path now keep their original visuals:** the preview's progressive blur is
+  created only for the unified half-pane preview, the hold blur is shown only for the unified half-pane hold, the
+  post-switch right-half blur also requires the unified renderer (`debug.duofold.unified=0` compares cleanly), and the
+  hold uses the half-pane layout only when both panels are upright (as `SecondaryShade` does).
+- `HandoffFadePolicy`: the 600 ms opening cap applies only when inner glass is required; the no-glass path (Duo
+  Classic, debug) keeps the 40 ms destination-draw cap.
+- `PreviewTransition`: hold readiness uses the per-model fresh window (700 ms on the Fold 7) so the hold drops on the
+  same frame that starts the reveal; pre-switch preparation keeps 500 ms.
+- `InnerLiveMirror.attach` re-checks its ticket after unlocking: a revoke that found the lock held could otherwise
+  leave the revoked mirror attached until the next poll.
+- Tests: `HandoffFadePolicyTest.openingCapAppliesOnlyWhenInnerGlassIsRequired` (fails without the fix),
+  `PreviewExpansionPolicyTest.readinessWindowMatchesTheRevealWindow`.
+
 ## 3.5.2-a16.15 — Upstream 3.5.3 alpha improvements: helper recovery, preview release gate, closed-hinge hysteresis (fork)
 
 Ported from the upstream 3.5.3 alpha line (joeconsorti/duo-fold-live) after surveying every branch off `main`.

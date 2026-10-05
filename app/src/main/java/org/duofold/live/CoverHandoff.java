@@ -50,6 +50,9 @@ final class CoverHandoff {
   changeState(false);
  }
  private void changeState(boolean toInner){
+  // Every new direct hold starts its own deferral window; a window left over from an earlier close must not let
+  // the new cover hold release early (review on PR #17/#18).
+  deferral.reset();
   long identity=Binder.clearCallingIdentity();Object previous=owned;boolean previousInner=innerHeld;
   try{
    init();
