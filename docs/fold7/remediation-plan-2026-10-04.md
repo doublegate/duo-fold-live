@@ -123,6 +123,17 @@ follows the hinge; no jump in perspective, size, blur or darkening at either swi
 | F6 | Low | V | Tooling: screenrecord shows 700-850 ms black per switch in every build (frame drop on layer-stack reassignment), so video black time is not a valid metric; only the DuoHandoff log is. Screenshots run ~1/s, too sparse for single-frame glitches. | Report black time from the log only; add a denser inner screencap mode (or `dumpsys SurfaceFlinger --latency`) for frame-level review. |
 | F7 | Low | V | `HandoffFade` reads `debug.duofold.right_blur_clear` and `preview_blur_max` once per fade-engine lifetime. | Covered by B10 (one cached tuning source). |
 
+## Post-plan device verification and follow-ups (2026-10-05)
+
+Device capture on a16.13 met the pass criteria: 0 sleep-path closes, 0 visible empty frames, half/half boundary on the
+centre line at every angle, flat right half, matching blur on both sides of each switch. Follow-ups chosen by the owner:
+
+| Item | Result |
+| --- | --- |
+| Shorter post-switch black | Not achievable from the app: the destination's windows are first painted by Android's display-switch transition ~300 ms after the switch, and the first capture completes just after it. A 500 ms post-switch capture timeout was tried and reverted (opening black rose). |
+| Left half black at 3-6 deg opening | Open. A warm cover frame while closed plus a pre-created strip still showed it in 2 of 7 samples; withdrawn. Suspected cause: the warm-capture trigger is evaluated at composition from non-Compose state, so it may never start. Next step: log whether it runs, fix the trigger, re-capture. |
+| Idle CPU | Done in a16.14: adaptive glass capture rate; Flex at rest 43 % -> 20 % of a core, closed 13.4 % -> 7.4 %. |
+
 ## Order of work and verification
 
 1. Phase A (A1, A2, A4, A8 verified first), each with its failing test.

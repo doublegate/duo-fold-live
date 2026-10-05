@@ -1,3 +1,26 @@
+## 3.5.2-a16.14 — Glass content capture slows down at rest (fork, post-plan follow-up)
+
+Measured on the device (SM-F966U1) with a per-process CPU sampler, 60 s per posture, phone still, screen on.
+
+- **All models:** the glass content capture loop runs at the configured rate (`content_fps`, default 120) only while
+  the hinge moves or right after a panel switch; once the hinge has been still for 1 s it captures at 10 fps (never
+  above the setting). The shader still redraws on every angle change; only the content under the glass refreshes
+  less often. Resting part-open (Flex, ~120 deg, glass partly visible) kept capturing at the full rate.
+
+| Posture at rest (app + angle service, % of one core) | a16.7 | a16.14 |
+| --- | --- | --- |
+| Fully open | 4.3 + 2.3 | 3.5 + 2.8 |
+| Closed (cover on) | 5.6 + 7.7 | 4.0 + 3.4 |
+| Flex (~120 deg) | 20.6 + 22.1 | 10.4 + 9.8 |
+
+- Tried and reverted (no gain on the device): a 500 ms timeout for post-switch captures. The first capture after a
+  switch completes only after Android's own display-switch transition paints the destination (~300 ms after the
+  switch); waiting longer did not make it sooner, and opening black rose. The remaining black is bounded by that
+  transition.
+- Tried and withdrawn pending a verified fix: keeping a warm cover frame while closed and pre-creating the inner left
+  strip, aimed at a brief black left half at 3-6 deg when opening; it still occurred in 2 of 7 samples.
+- Tests: `AdaptiveCaptureRateTest`.
+
 ## 3.5.2-a16.13 — Closing cap from capture data, lighter poll replies; remediation plan complete (fork, Phase F)
 
 Plan Phase F (F2-F6; F1 and F7 landed in a16.9). This completes `docs/fold7/remediation-plan-2026-10-04.md`.

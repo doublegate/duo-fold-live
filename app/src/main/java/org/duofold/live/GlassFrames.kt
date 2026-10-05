@@ -55,7 +55,9 @@ internal object GlassFrames {
     if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid,captureDisplay);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · ${response.getString("backend") ?: "layer capture"}"}
     else if(GlassFramePolicy.keepOnFailure(frame!=null,SystemClock.elapsedRealtime()-(frame?.stamp?:0L))){dlog("capture FAIL (frame kept): $message");main.postDelayed(this,GlassFramePolicy.RETRY_WITH_FRAME_MS);return@post}
     else{frame=null;status="Glass unavailable; debug-style fallback: $message";dlog("capture FAIL (frame cleared): $message")}
-    main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(targetFps,SystemClock.elapsedRealtimeNanos()-started))
+    // Full rate while the hinge moves or right after a switch; RenderQuality.STILL_FPS once still. The shader redraws
+    // on every angle change regardless; only the captured content under the glass is refreshed less often.
+    main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(RenderQuality.adaptiveFps(targetFps,LiveAngles.sinceAngleChangeMs(),SystemClock.elapsedRealtime()<urgentUntil),SystemClock.elapsedRealtimeNanos()-started))
    }else if(clients>0 && !suspended)main.post(this)}
   }
  }}

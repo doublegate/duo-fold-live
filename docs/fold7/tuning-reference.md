@@ -22,6 +22,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | 3.5.2-a16.11 | Phase D | Service races: mirror attach generation, ticker reset, bounded settings commands, exclusion copies, rotation hand-over, destroy wait. |
 | 3.5.2-a16.12 | Phase E | Shared hysteresis constants and defer timer, endpoint freshness, tests. |
 | 3.5.2-a16.13 | Phase F | Closing cap 380 ms, diagnostics cadence; plan complete. |
+| 3.5.2-a16.14 | Follow-up | Adaptive glass capture rate (10 fps once the hinge is still). |
 
 ## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
 
@@ -83,6 +84,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | Poll period | 4 ms while the angle changed in the last 400 ms, or within 2 s of a change inside the 80-115 deg band; 33 ms otherwise; 500 ms with the screen off | The wallpaper reports every 30-130 ms in 2-3 deg steps; 4 ms polling when still bought nothing, and resting in Flex posture kept it fast forever. |
 | Fade engine idle | no per-vsync ticks unless switching, fading or within the same motion/band window | Same reason. |
 | Keyguard checks | overlay: 200 ms cache cleared on screen/unlock broadcasts; hold: every 200 ms | Binder call per animation frame / per 8 ms tick. |
+| Glass content capture rate | `content_fps` while moving or within the post-switch window; 10 fps once still for 1 s (`RenderQuality.STILL_FPS`) | Resting in Flex captured at 120 fps: 43 % of a core, now 20 %. |
 | Shade frame loop | suspended once the smoothed angle settles; wakes on angle or panel change, 250 ms re-check | Ran at 120 Hz whenever the screen was on. |
 | Secondary-panel refresh | 8 ms moving, 100 ms still | Each refresh makes several Binder calls on the main thread. |
 | Mirror attach IPC | own thread on both sides | The attach waits up to 250 ms for its commit and stalled the angle poll mid-transition. |

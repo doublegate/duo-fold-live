@@ -69,6 +69,8 @@ public final class LiveAngles {
  public static volatile boolean effectAllowed=true;
  private boolean pollInFlight,urgentPoll;
  private long angleChangedAt;
+ /** ms since the last angle change seen by the active reader (huge when idle or stopped). */
+ public static long sinceAngleChangeMs(){LiveAngles self=current;return self==null?Long.MAX_VALUE:SystemClock.elapsedRealtime()-self.angleChangedAt;}
  private long pollStarted;
  private static long roundTripMs;
  private static String rateSummary="Collecting polling rates";
