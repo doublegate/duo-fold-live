@@ -18,7 +18,7 @@ final class InnerLiveMirror {
  Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed){return attach(id,parent,width,height,allowed,gate.ticket());}
  Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed,int ticket){
   lock.lock();
-  long identity=Binder.clearCallingIdentity();Bundle result=new Bundle();
+  long identity=Binder.clearCallingIdentity();Bundle result=new Bundle();SurfaceControl built=null;
   try{
    close();
    if(!allowed||parent==null||!parent.isValid())throw new IllegalStateException("Cover mirror not currently eligible");
@@ -44,9 +44,14 @@ final class InnerLiveMirror {
    if(!committed.await(250,java.util.concurrent.TimeUnit.MILLISECONDS))throw new IllegalStateException("Right preview commit not yet confirmed; retrying");
    // Revoked (preview no longer allowed, or reader stopped) while this attach was in flight: close what it built.
    if(!gate.valid(ticket))throw new IllegalStateException("Preview revoked during attach");
-   owner=id;status="Live cover → inner preview (right aligned; normal handoff)";result.putBoolean("ok",true);
+   built=mirror;owner=id;status="Live cover → inner preview (right aligned; normal handoff)";result.putBoolean("ok",true);
   }catch(Exception e){close();Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();status="Cover mirror unavailable: "+cause.getClass().getSimpleName()+": "+cause.getMessage();}
   finally{if(parent!=null)parent.release();Binder.restoreCallingIdentity(identity);lock.unlock();}
+  // A revoke between the check above and the unlock finds the lock held, so its tryLock skips the close. Re-check
+  // after unlocking: either revoke saw the lock free and closed, or the bumped generation is visible here.
+  if(built!=null&&!gate.valid(ticket)){
+   lock.lock();try{if(mirror==built){close();status="Preview revoked during attach";result.putBoolean("ok",false);}}finally{lock.unlock();}
+  }
   result.putString("status",status);return result;
  }
  void detach(int id){lock.lock();try{if(owner==id)close();}finally{lock.unlock();}}

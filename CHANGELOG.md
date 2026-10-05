@@ -31,6 +31,15 @@ Glass frames
 - Each frame records its capture display and is accepted only by surfaces drawing that display; continuity-native display-1 frames were checked against display 0 and never rendered.
 - A failed capture keeps the last good frame while it is still renderable (the 350 ms render age is unchanged) and retries in 32 ms, instead of dropping the glass to its fallback.
 
+Review fixes
+
+- The angle parser publishes its per-action tokens as one immutable snapshot; two reader threads overlapping after a restart could pair one action's name with another action's tokens and reject every sample.
+- A direct-mode state change resets the release deferral, so a new cover hold never inherits an expired window from an earlier close.
+- The dual-mode cover session's reopening escape requires a fresh sample, as the cover hold's already did.
+- When dual mode is toggled, the incoming controller starts only after the outgoing override has actually released.
+- A live-mirror attach re-checks its ticket after unlocking, so a revoke that found the lock held cannot leave the mirror attached.
+- The glass source-size lookup clears its reused output first, so an absent display cannot leave stale dimensions.
+
 Tests: `CloseReleaseGateTest`, `ReleaseDeferralTest`, `MirrorAttachGateTest`, `AngleParserTest`, `DiagnosticsCadenceTest`, `AdaptiveCaptureRateTest`, `GlassFrameRetentionTest`, and additions to `HandoffPolicyTest`, `DirectHandoffPolicyTest`, `ClosingMirrorFadePolicyTest` and `PollCadenceTest`.
 
 ## 1.6.0 — Tested performance release
