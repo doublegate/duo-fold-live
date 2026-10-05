@@ -1,3 +1,16 @@
+## 3.5.2-a16.5 — Unified left-strip glass, aligned reveals, faster post-switch frames (fork, checkpoint)
+
+Developed against frame-by-frame recordings of both panels (see the fork's Fold 7 project tooling). Fold 7 only unless noted; every other model keeps upstream behaviour.
+
+- Unified mode (`debug.duofold.unified`, default on for the Fold 7): before the switch the inner panel's left strip is drawn by the perspective glass shader (mirrored cover), and the right pane stays a flat live mirror with the progressive blur. The frozen frosted snapshot and seam strip no longer cover it.
+- The left-strip reflection uses the inner perspective profile (early/end stretch, vertical compression, startup easing), so it matches the post-switch leaf; the inner sliders now tune both sides.
+- `debug.duofold.reflect_max_hinge` (default 55°) keeps the reflection from folding edge-on, which made it collapse ~0.6 s before the switch; `debug.duofold.max_darken` (default 0.55) caps the glass edge darkening, which blacked the panel out around 104–114° while closing.
+- Opening and closing reveal from black only on a real glass frame of the new panel (opening capped at ON+600 ms, closing likewise), so the reveal never lands on the dark capture fallback; the mirrored hold is dropped at that moment instead of cross-fading, removing a double exposure and a black frame at the cut-over.
+- The first post-switch capture starts at the switch: the fade logic publishes the switch time through the angle poll, `GlassFrames.precapture()` captures with an empty exclusion list before the rebuilt overlay exists (`GlassCapture` now accepts zero exclusions for live captures), and the overlay's own `requestFreshCapture()` no longer discards it. Measured median black per transition ~0.6 s (was ~0.8 s).
+- All models: the angle reader reaps orphaned `logcat` readers left behind when the Shizuku service process is killed (found running for hours, doubling log parsing).
+- Diagnostics (debug builds): `debug.duofold.record_visible=1` keeps Duo's layers visible to screen recordings and excludes them from the glass capture explicitly, applied live; logs `DuoFallback`, `DuoMirror`, `DuoState`, `DuoReady`.
+- Known: a one-frame cover blink ~210–250 ms after the concurrent-state request is released at full close (Android display reconfiguration); first post-switch capture latency (150–400 ms) bounds the black.
+
 ## 3.5.2-a16.3 — Progressive preview blur and blurred handoff hold (fork, checkpoint)
 
 - Opening, before the panel switch: the live cover preview on the inner panel (a full-resolution compositor mirror, previously always sharp) gets a SurfaceFlinger background-blur effect layer whose radius follows the hinge: smoothstep from 0 px at 0° to 56 px at the Fold 7 switch angle, matching the cover glass's `smoothstep(hinge/90°)` blur curve. Radius updates glide at 8 ms intervals (40 ms time constant) between angle samples, which arrive only every 30–130 ms in 2–3° steps.

@@ -39,6 +39,7 @@ internal object DuoGlassShader {
  uniform float horizontal;
  uniform float reverse;
  uniform float intensity;
+ uniform float maxDarken;
  uniform float blurStrength;
  uniform float seamOffset;
  uniform float reflectedCover;
@@ -185,7 +186,7 @@ internal object DuoGlassShader {
   }
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
-  color*=half(1.0-min(1.0,effect*2.0*intensity));
+  color*=half(1.0-min(maxDarken,effect*2.0*intensity));
   float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
@@ -200,6 +201,7 @@ internal object DuoGlassShader {
  AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
+ private val unifiedLeft=UnifiedRenderer.enabled()
  private var hingeAngle=Float.NaN
  private var targetAngle=Float.NaN
  private var renderedAngle=Float.NaN
@@ -207,7 +209,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var angleListening=false
  private var paintedEffect=false
  private var fallbackReason=""
- private fun fallback(reason:String){if(reason!=fallbackReason){if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
+ private fun fallback(reason:String){if(reason!=fallbackReason && BuildConfig.DEBUG)android.util.Log.i("DuoFallback","${if(inner) "inner" else "cover"}${if(reflectedCover) " reflected" else ""}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");if(reason!=fallbackReason){if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
  private val clearGuard=object:Runnable{override fun run(){
   if(!holder.surface.isValid)return
   if(paintedEffect && (!LiveAngles.fresh() || !LiveAngles.effectAllowed || (!inner && targetAngle<=0f))){
@@ -258,7 +260,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var lastReadyEndpoint=-1L
  /** Tie readiness to this SurfaceView's next buffer, not its parent UI draw. */
  private fun trackReadyFrame(rendered:GlassFrame?,endpoint:Boolean){
-  if(preview || frozen || !inner || readinessPending)return
+  if(preview || frozen || reflectedCover || readinessPending)return
+  if(!inner && (endpoint || lastReadyCapture>=0))return  // cover: one readiness report per switch
   val now=SystemClock.elapsedRealtime()
   if(endpoint){if(now-lastReadyEndpoint<50)return}
   else if(rendered==null || rendered.stamp==lastReadyCapture)return
@@ -270,8 +273,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      if(gen==readinessGeneration && holder.surface.isValid){
       readinessPending=false
       if(endpoint)lastReadyEndpoint=SystemClock.elapsedRealtime() else lastReadyCapture=rendered!!.stamp
-      HandoffFadeFrames.committed(true,rendered?.stamp ?: -1,endpoint)
-      if(endpoint)PreviewTransition.innerEndpointCommitted() else if(rendered!=null)PreviewTransition.innerFrameSubmitted(rendered)
+      HandoffFadeFrames.committed(inner,rendered?.stamp ?: -1,endpoint)
+      if(inner){if(endpoint)PreviewTransition.innerEndpointCommitted() else if(rendered!=null)PreviewTransition.innerFrameSubmitted(rendered)}
      }
     }
     applyTransactionToFrame(transaction)
@@ -382,12 +385,15 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
      shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
-     shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",if(inner).9f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(inner).9f else 2.7f})
-     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",if(inner).45f else 1.25f).let{if(it.isFinite())it.coerceIn(if(inner)0f else .8f,1.5f) else if(inner).45f else 1.25f} else .8f)
-     if(!classic)shader.setFloatUniform("verticalCompression",quality.getFloat(if(inner)"inner_vertical_compression" else "cover_vertical_compression",if(inner).6f else 1.15f).let{if(it.isFinite())it.coerceIn(0f,2f) else if(inner).6f else 1.15f})
-     shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(inner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
+     // Unified mode: the left-strip reflection uses the inner profile so its perspective matches the post-switch leaf.
+     val tuneInner=inner || (reflectedCover && unifiedLeft)
+     shader.setFloatUniform("earlyStretch",quality.getFloat(if(tuneInner)"inner_early_stretch" else "early_stretch",if(tuneInner).9f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(tuneInner).9f else 2.7f})
+     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(tuneInner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(tuneInner)"inner_end_stretch" else "end_stretch",if(tuneInner).45f else 1.25f).let{if(it.isFinite())it.coerceIn(if(tuneInner)0f else .8f,1.5f) else if(tuneInner).45f else 1.25f} else .8f)
+     if(!classic)shader.setFloatUniform("verticalCompression",quality.getFloat(if(tuneInner)"inner_vertical_compression" else "cover_vertical_compression",if(tuneInner).6f else 1.15f).let{if(it.isFinite())it.coerceIn(0f,2f) else if(tuneInner).6f else 1.15f})
+     shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(tuneInner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
+     shader.setFloatUniform("maxDarken",if(unifiedLeft)UnifiedTuning.maxDarken() else 1f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
      shader.setFloatUniform("texSize",f.bitmap.width.toFloat(),f.bitmap.height.toFloat())
      shader.setFloatUniform("origin",if(fallback)width-ew else 0f,if(fallback)(height-eh)/2f else 0f)
@@ -395,8 +401,11 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("sampleOffset",if(fit!=null)-fit[1]/ew else 0f,if(fit!=null)-fit[2]/eh else 0f)
      shader.setFloatUniform("extent",if(projectedCover)width.toFloat() else ew,if(projectedCover)height.toFloat() else eh);shader.setFloatUniform("progress",amount.coerceIn(0f,1f));shader.setFloatUniform("intensity",intensity)
      // Inner progress already includes the user's fully-open threshold (default 172°).
+     val coverHinge=(if(hingeAngle.isFinite())hingeAngle.coerceIn(0f,180f) else amount*110f).let{
+      // Unified: the left reflection must not fold edge-on at 90 deg (it collapsed ~0.6 s before the switch).
+      if(reflectedCover && unifiedLeft)minOf(it,UnifiedTuning.reflectMaxHinge()) else it}
      val radians=if(inner) amount.coerceIn(0f,1f)*(Math.PI.toFloat()/2f) else
-      Math.PI.toFloat()-(if(hingeAngle.isFinite())hingeAngle.coerceIn(0f,180f) else amount*110f)*(Math.PI.toFloat()/180f)
+      Math.PI.toFloat()-coverHinge*(Math.PI.toFloat()/180f)
      if(!classic)shader.setFloatUniform("foldRadians",radians)
      shader.setFloatUniform("inner",if(inner)1f else 0f);shader.setFloatUniform("fallback",if(fallback)1f else 0f)
      shader.setFloatUniform("horizontal",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270)1f else 0f)

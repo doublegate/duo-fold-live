@@ -37,7 +37,7 @@ final class GlassCapture extends Binder {
     result.putString("previous",previous);result.putString("value",observed);result.putBoolean("ok",true);
    }else if(code==1 || code==3){
     long captureStarted=SystemClock.elapsedRealtime();
-    int n=data.readInt();if(n<1||n>4)throw new IllegalArgumentException("No valid overlay exclusion surfaces");
+    int n=data.readInt();if(n<0||n>4||(n==0&&code!=1))throw new IllegalArgumentException("No valid overlay exclusion surfaces");  // n==0: post-switch pre-capture before the new overlay exists
     excluded=new SurfaceControl[n];for(int i=0;i<n;i++)excluded[i]=data.readTypedObject(SurfaceControl.CREATOR);
     int displayId=code==1&&data.dataAvail()>=4?data.readInt():0;
     if(displayId<0||displayId>1)throw new IllegalArgumentException("Unsupported capture display");
@@ -51,7 +51,10 @@ final class GlassCapture extends Binder {
     Class<?> builder=captureApi.builder;Object b=captureApi.constructor.newInstance();
     builder.getMethod("setSourceCrop",Rect.class).invoke(b,new Rect(0,0,w,h));
     builder.getMethod("setFrameScale",float.class).invoke(b,Math.min(1f,(code==3?1440f:640f)/Math.max(w,h)));
-    builder.getMethod("setExcludeLayers",SurfaceControl[].class).invoke(b,(Object)excluded);
+    SurfaceControl[] extra=RecordVisible.exclusions();
+    SurfaceControl[] all=extra.length==0?excluded:java.util.Arrays.copyOf(excluded,excluded.length+extra.length);
+    if(extra.length>0)System.arraycopy(extra,0,all,excluded.length,extra.length);
+    builder.getMethod("setExcludeLayers",SurfaceControl[].class).invoke(b,(Object)all);
     Object args=builder.getMethod("build").invoke(b);
     Object shot;
     try(CaptureCompletion<Object> completion=new CaptureCompletion<>(GlassCapture::releaseShot)){

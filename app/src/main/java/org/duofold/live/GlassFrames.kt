@@ -22,22 +22,35 @@ internal object GlassFrames {
  private val surfaces=LinkedHashMap<Any,SurfaceControl>()
  fun surface(key:Any,sc:SurfaceControl?){if(sc==null)surfaces.remove(key) else surfaces[key]=sc}
  private fun resetMeasurement(){measuredStart=SystemClock.elapsedRealtime();measuredFrames=0;measuredFps=0f}
- fun acquire(){clients++;if(clients==1){resetMeasurement();generation++;main.post(tick)}}
- fun release(){clients=(clients-1).coerceAtLeast(0);if(clients==0){generation++;frame=null;main.removeCallbacks(tick)}}
+ private var precapturing=false
+ /** Fold 7 unified: start the first post-switch capture at the switch, before the rebuilt overlay acquires. */
+ fun precapture(){
+  if(suspended)return
+  if(precapturing && SystemClock.elapsedRealtime()<urgentUntil)return  // one switch, one precapture
+  precapturing=true;frame=null;urgentUntil=SystemClock.elapsedRealtime()+900;requestedAt=SystemClock.elapsedRealtime();dlog("precapture at switch")
+  main.removeCallbacks(tick);main.post(tick)
+ }
+ fun acquire(){clients++;if(clients==1){resetMeasurement();if(!precapturing)generation++;main.post(tick)}}
+ fun release(){clients=(clients-1).coerceAtLeast(0);if(clients==0 && !precapturing){generation++;frame=null;main.removeCallbacks(tick)}}
  private var urgentUntil=0L
  private var requestedAt=0L;private var loggedEmpty=-1
  private fun dlog(m:String){if(BuildConfig.DEBUG)android.util.Log.i("DuoReady",m)}
  fun requestFreshCapture(){
+  // Do not discard a precapture already in flight for this switch; it is the frame we are waiting for.
+  if(precapturing && SystemClock.elapsedRealtime()<urgentUntil){dlog("fresh capture folded into precapture");if(!pending){main.removeCallbacks(tick);main.post(tick)};return}
   generation++;frame=null;urgentUntil=SystemClock.elapsedRealtime()+900;requestedAt=SystemClock.elapsedRealtime();dlog("fresh capture requested")
   main.removeCallbacks(tick)
   if(clients>0 && !suspended)main.post(tick)
  }
  private fun retryDelay(normal:Long)=if(SystemClock.elapsedRealtime()<urgentUntil)16L else normal
  private val tick=object:Runnable{override fun run(){
-  if(clients==0 || suspended)return
+  val urgent=SystemClock.elapsedRealtime()<urgentUntil
+  if((clients==0 && !(urgent && precapturing)) || suspended)return
   if(pending){main.postDelayed(this,retryDelay(50));return}
   val valid=surfaces.values.filter{it.isValid}.take(4)
-  if(valid.isEmpty()){if(loggedEmpty!=generation){loggedEmpty=generation;dlog("no valid surfaces +"+(SystemClock.elapsedRealtime()-requestedAt)+"ms")};frame=null;main.postDelayed(this,retryDelay(100));return}
+  // Right after a panel switch the new overlay does not exist yet, so there is nothing of ours to exclude:
+  // capture immediately instead of waiting ~120-170 ms for it (its first frame gates the reveal).
+  if(valid.isEmpty() && !(urgent && precapturing)){if(loggedEmpty!=generation){loggedEmpty=generation;dlog("no valid surfaces +"+(SystemClock.elapsedRealtime()-requestedAt)+"ms")};frame=null;main.postDelayed(this,retryDelay(100));return}
   val started=SystemClock.elapsedRealtimeNanos();val gen=generation;val captureDisplay=if(LiveAngles.continuityNative)1 else 0;pending=true
   executor.execute{
    var result:Bundle?=null;var error="Glass frame unavailable"
@@ -51,8 +64,9 @@ internal object GlassFrames {
    main.post{pending=false;if(gen==generation && clients>0 && !suspended && captureDisplay==(if(LiveAngles.continuityNative)1 else 0)){
     val bitmap=capturedBitmap
     if(SystemClock.elapsedRealtime()<urgentUntil)dlog("capture "+(if(response?.getBoolean("ok")==true)"ok" else "FAIL: $message")+" +"+(SystemClock.elapsedRealtime()-requestedAt)+"ms surfaces=${valid.size} display=$captureDisplay")
+    if(response?.getBoolean("ok")==true && bitmap!=null)precapturing=false
     if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · ${response.getString("backend") ?: "layer capture"}"}
-    else{frame=null;status="Glass unavailable; debug-style fallback: $message"}
+    else{frame=null;status="Glass unavailable; debug-style fallback: $message";dlog("capture FAIL (frame cleared): $message")}
     main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(targetFps,SystemClock.elapsedRealtimeNanos()-started))
    }else if(clients>0 && !suspended)main.post(this)}
   }

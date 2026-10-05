@@ -22,4 +22,13 @@ public class PreviewExpansionPolicyTest {
   assertFalse(PreviewExpansionPolicy.fresh(100,601));
   assertTrue(PreviewExpansionPolicy.fresh(100,600));
  }
+
+ @Test public void zeroFadeDropsHoldAtReadinessWhileBlackStillCoversIt(){
+  // Fold 7 unified: the reveal from black starts at readiness, so a cross-faded hold would double-expose.
+  assertEquals(1f,PreviewExpansionPolicy.opacity(49,50,0),0);
+  assertEquals(0f,PreviewExpansionPolicy.opacity(50,50,0),0);
+  assertEquals(1f,PreviewExpansionPolicy.opacity(1000,-1,0),0);
+  assertEquals(0f,PreviewExpansionPolicy.opacity(1500,-1,0),0);
+  assertEquals(PreviewExpansionPolicy.opacity(110,50),PreviewExpansionPolicy.opacity(110,50,120),0);
+ }
 }

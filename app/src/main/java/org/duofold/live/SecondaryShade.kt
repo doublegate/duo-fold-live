@@ -26,6 +26,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /** The outgoing panel shows only its own pre-switch frame; incoming content stays native. */
 internal class SecondaryShade(private val service:AccessibilityService,display:Display,private val intensity:Float,private val preview:Boolean=false,private val nativeContent:Boolean=false,private val event:(String)->Unit):Presentation(service,display,android.R.style.Theme_Material_NoActionBar){
+ private val unified=preview && UnifiedRenderer.enabled()
  private val life=OverlayOwner()
  private var compose:ComposeView?=null
  private var coverAspect=.63f
@@ -62,7 +63,8 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
       BoxWithConstraints(Modifier.fillMaxSize()){
        // Geometry must not depend on the shared frame: surface creation clears that frame.
        val left=maxWidth-maxHeight*coverAspect
-       if(!frostedReflection && leftStarted && left.value>0 && coverAspect<.7f){
+       // Unified mode: perspective glass on the left strip only; the right pane stays flat (mirror + blur).
+       if((!frostedReflection || unified) && leftStarted && left.value>0 && coverAspect<.7f){
         Box(Modifier.fillMaxHeight().width(left)){
          DuoLiveShade(object:StandaloneFoldHost{
           override fun onMovement(){}

@@ -60,9 +60,10 @@ final class CoverHandoff {
     if(m.getName().equals("hashCode"))return System.identityHashCode(proxy);
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
-    if(m.getName().equals("onRequestCanceled")){synchronized(this){if(owned==next){owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
+    if(m.getName().equals("onRequestCanceled")){if(BuildConfig.DEBUG)android.util.Log.i("DuoState","request canceled by system");synchronized(this){if(owned==next){owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
    });
    owned=next;innerHeld=toInner;request.invoke(manager,next,(Executor)Runnable::run,callback);
+   if(BuildConfig.DEBUG)android.util.Log.i("DuoState","request "+(toInner?"inner":"cover")+" concurrent state");
    status=toInner?"Direct concurrent handoff: inner primary; holding until fully open":"Cover held below handoff; switch at 98° or closed";
   }catch(Exception e){owned=previous;innerHeld=previousInner;releaseOwned();Throwable root=e;while(root.getCause()!=null)root=root.getCause();status="Handoff unavailable: "+root.getClass().getSimpleName()+": "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(identity);}
@@ -71,6 +72,6 @@ final class CoverHandoff {
  synchronized void release(){probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
  private void releaseOwned(){
   policy.reset();if(owned==null)return;long identity=Binder.clearCallingIdentity();
-  try{cancel.invoke(manager);owned=null;innerHeld=false;status="Normal display control restored";}catch(Exception e){status="Display release pending";}finally{Binder.restoreCallingIdentity(identity);}
+  try{if(BuildConfig.DEBUG)android.util.Log.i("DuoState","cancel concurrent state request");cancel.invoke(manager);owned=null;innerHeld=false;status="Normal display control restored";}catch(Exception e){status="Display release pending";}finally{Binder.restoreCallingIdentity(identity);}
  }
 }

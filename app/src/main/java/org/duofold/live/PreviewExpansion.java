@@ -13,6 +13,7 @@ final class PreviewExpansion extends Binder {
  private final HandlerThread thread=new HandlerThread("duo-preview-expansion");
  private final Handler handler;
  private Object dm,wm;private java.lang.reflect.Method displayInfo,keyguard;
+ private boolean unified,lastRecord;
  private SurfaceControl layer,backdrop,seam,holdBlur;private java.lang.reflect.Method holdBlurRadius;private float holdRadius=56;private Bitmap seamHardware;private HardwareBuffer seamBuffer;private int seamPixels;private Bitmap hardware,cleanHardware;private HardwareBuffer buffer,cleanBuffer;
  private boolean frostedLeft,rightPreviewReady;
  private String innerId;private int bw,bh;
@@ -105,13 +106,13 @@ final class PreviewExpansion extends Binder {
   if(holdBlur==null){try{SurfaceControl.Builder hb=new SurfaceControl.Builder().setName("Duo hold blur").setHidden(true);
    SurfaceControl.Builder.class.getMethod("setEffectLayer").invoke(hb);holdBlur=hb.build();
    holdBlurRadius=SurfaceControl.Transaction.class.getMethod("setBackgroundBlurRadius",SurfaceControl.class,int.class);}catch(Exception e){holdBlur=null;holdBlurRadius=null;}}
-  holdRadius=holdBlurProp();
+  holdRadius=holdBlurProp();unified=UnifiedRenderer.enabled();
   if(backdrop==null)backdrop=new SurfaceControl.Builder().setName("Duo reflected left handoff copy").setBufferSize(bitmap.getWidth(),bitmap.getHeight()).setOpaque(true).setHidden(true).build();
   try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
-   SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,backdrop,true);
+   RecordVisible.hide(t,backdrop);
    t.setBuffer(backdrop,nextBuffer).setLayer(backdrop,Integer.MAX_VALUE-21).setAlpha(backdrop,1f);
    // Own surface only. Excluded from mirrored content and subsequent effect captures.
-   SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,layer,true);
+   RecordVisible.hide(t,layer);
    t.setBuffer(layer,nextCleanBuffer).setLayer(layer,Integer.MAX_VALUE-20).setAlpha(layer,1f).setVisibility(layer,false).apply();
   }
   if(buffer!=null)buffer.close();if(hardware!=null)hardware.recycle();
@@ -134,7 +135,7 @@ final class PreviewExpansion extends Binder {
   Bitmap soft=Bitmap.createBitmap(pixels,strip,bh,Bitmap.Config.ARGB_8888);Bitmap next=soft.copy(Bitmap.Config.HARDWARE,false);soft.recycle();HardwareBuffer nextBuffer=next.getHardwareBuffer();
   if(seam==null)seam=new SurfaceControl.Builder().setName("Duo static center-edge blur").setBufferSize(strip,bh).setHidden(true).build();
   try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
-   SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,seam,true);
+   RecordVisible.hide(t,seam);
    t.setBuffer(seam,nextBuffer).setLayer(seam,Integer.MAX_VALUE-18).apply();
   }
   if(seamBuffer!=null)seamBuffer.close();if(seamHardware!=null)seamHardware.recycle();seamHardware=next;seamBuffer=nextBuffer;seamPixels=strip;
@@ -156,7 +157,7 @@ final class PreviewExpansion extends Binder {
     if(BuildConfig.DEBUG)android.util.Log.i("DuoHold","hold start readyAlready="+pendingReady+" blur="+Math.round(holdRadius));
    }
    long elapsed=start==0?0:now-start;
-   float alpha=start==0?1f:PreviewExpansionPolicy.opacity(elapsed,ready);
+   float alpha=start==0?1f:PreviewExpansionPolicy.opacity(elapsed,ready,unified&&DeviceCompatibility.isFold7(android.os.Build.MODEL)?0:120);
    if(alpha<=0){if(BuildConfig.DEBUG)android.util.Log.i("DuoHold","hold end elapsed="+elapsed+" readyAt="+ready);completed=true;clear("Prepared layout handed to inner content");return;}
    int stack=number(target,"layerStack"),panelState=number(target,"state");
    if(stack!=lastStack || panelState!=lastPanelState){lastStack=stack;lastPanelState=panelState;event("Inner stack="+stack+" state="+panelState);}
@@ -170,7 +171,9 @@ final class PreviewExpansion extends Binder {
     SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,backdrop,leftWidth/bw,0f,0f,h/(float)bh);
     // The left copy is visible BEFORE handoff. Never hide either layer merely because
     // Android reports a transient OFF state during the physical panel remap.
-    t.setPosition(backdrop,0,0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady)) && leftWidth>0);
+    boolean record=RecordVisible.enabled();
+    if(record!=lastRecord){lastRecord=record;RecordVisible.hide(t,backdrop);RecordVisible.hide(t,layer);if(seam!=null)RecordVisible.hide(t,seam);}
+    t.setPosition(backdrop,0,0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady && !unified)) && leftWidth>0);
     t.setPosition(layer,leftWidth,(h-bh*fit)/2f).setAlpha(layer,alpha).setVisibility(layer,start>0);
     if(holdBlur!=null&&holdBlurRadius!=null){
      // Same compositor blur as the live preview, so the frozen right frame continues its look.
@@ -183,7 +186,7 @@ final class PreviewExpansion extends Binder {
     if(seam!=null){
      SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,seam,stack);
      SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,seam,fit,0f,0f,fit);
-     t.setPosition(seam,leftWidth,(h-bh*fit)/2f).setAlpha(seam,alpha*seamMotion).setVisibility(seam,seamPixels>0);
+     t.setPosition(seam,leftWidth,(h-bh*fit)/2f).setAlpha(seam,alpha*seamMotion).setVisibility(seam,seamPixels>0 && (start>0 || !unified));
     }
     if(coverCommit!=null){final java.util.concurrent.CountDownLatch fence=coverCommit;coverCommit=null;
      final long submitted=SystemClock.elapsedRealtime();

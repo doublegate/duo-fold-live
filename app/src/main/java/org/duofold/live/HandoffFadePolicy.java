@@ -4,7 +4,9 @@ final class HandoffFadePolicy {
  static final long REVEAL_MS=180,READY_TIMEOUT_MS=900,ON_SETTLE_MS=32;
  static final int UI_DRAW=0,GLASS_COMMITTED=1,ENDPOINT_COMMITTED=2;
  static final long COMMIT_SETTLE_MS=2;
- private boolean requireInnerGlass;
+ private boolean requireInnerGlass,requireCoverGlass;
+ /** Fold 7 unified: the closing reveal also waits for a real cover glass frame (else it lands on the dark capture fallback). */
+ void coverGlass(boolean require){requireCoverGlass=require;}
  private float openThreshold=172;
  private long readyAt=-1;
  String readiness="idle";
@@ -56,6 +58,14 @@ final class HandoffFadePolicy {
  static long tickDelayMs(boolean transitioning,boolean fastSwitchTicks){return transitioning&&fastSwitchTicks?16:80;}
  private long readyTimeout=READY_TIMEOUT_MS;
  void readyTimeout(long ms){readyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:READY_TIMEOUT_MS;}
+ /**
+  * Opening (destination = inner) may wait longer than closing: on the Fold 7 the first inner glass frame
+  * commits ~300-450 ms after the switch, and revealing earlier exposes the mirrored hold, which then cuts
+  * over to the full display outside the black. Waiting keeps that cut-over inside the black. -1 = use readyTimeout.
+  */
+ static long openingReadyTimeoutFor(String model){return DeviceCompatibility.isFold7(model)?600:READY_TIMEOUT_MS;}
+ private long openingReadyTimeout=-1;
+ void openingReadyTimeout(long ms){openingReadyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:-1;}
  private float innerBlack=DEFAULT_INNER_BLACK,coverBlack=DEFAULT_COVER_BLACK;
  void blackAngles(float inner,float cover){
   boolean ok=Float.isFinite(inner)&&Float.isFinite(cover)&&inner>=60&&inner<=130&&cover>=60&&cover<=130;
@@ -75,11 +85,11 @@ final class HandoffFadePolicy {
    if(!on){onSince=reveal=readyAt=-1;readiness="waiting for panel ON";return 1;}
    if(onSince<0)onSince=now;
    if(reveal<0){
-    if(inner&&requireInnerGlass){
-     boolean committed=drawnInner&&drawn>=onSince&&drawn<=now;
+    if((inner&&requireInnerGlass)||(!inner&&requireCoverGlass)){
+     boolean committed=drawnInner==inner&&drawn>=onSince&&drawn<=now;
      boolean freshContent=committed&&captured>=onSince&&captured<=drawn&&now-captured<=350;
      boolean glass=freshContent&&kind==GLASS_COMMITTED;
-     boolean endpoint=freshContent&&kind==ENDPOINT_COMMITTED&&angle>=openThreshold;
+     boolean endpoint=inner&&freshContent&&kind==ENDPOINT_COMMITTED&&angle>=openThreshold;
      if(readyAt<0){
       if(glass||endpoint){readyAt=drawn;readiness=glass?"fresh content capture + glass frame committed":"fresh content capture + fully-open clear committed";}
       else readiness="waiting for fresh content capture + glass commit";
@@ -88,7 +98,8 @@ final class HandoffFadePolicy {
     }else if(now-onSince>=ON_SETTLE_MS&&drawnInner==inner&&drawn>=onSince+ON_SETTLE_MS){reveal=now;readiness="destination draw";}
     // Emergency escape is not evidence of readiness. Keep a bounded recovery
     // instead of leaving the user's display black after a renderer failure.
-    if(reveal<0&&now-onSince>=readyTimeout){reveal=now;readiness=readyTimeout<READY_TIMEOUT_MS?"fast reveal at ON+"+readyTimeout+" ms; destination draw NOT confirmed":"TIMEOUT recovery; readiness NOT confirmed";}
+    long limit=openingReadyTimeout>0&&(inner||requireCoverGlass)?openingReadyTimeout:readyTimeout;
+    if(reveal<0&&now-onSince>=limit){reveal=now;readiness=limit<READY_TIMEOUT_MS?"reveal cap at ON+"+limit+" ms; destination readiness NOT confirmed":"TIMEOUT recovery; readiness NOT confirmed";}
    }
    if(reveal<0)return 1;
    float x=Math.min(1,(now-reveal)/(float)revealMs(gradualness));

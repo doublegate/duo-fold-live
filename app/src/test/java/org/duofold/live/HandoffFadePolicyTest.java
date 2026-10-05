@@ -164,4 +164,54 @@ public class HandoffFadePolicyTest {
   p.opacity(10,true,98,true,true,-1,false);
   assertEquals(1,p.opacity(500,true,98,true,true,-1,false),0);
  }
+
+ @Test public void fold7OpeningWaitsForInnerGlassSoCutOverIsInsideBlack(){
+  assertEquals(600,HandoffFadePolicy.openingReadyTimeoutFor("SM-F966U1"));
+  assertEquals(HandoffFadePolicy.READY_TIMEOUT_MS,HandoffFadePolicy.openingReadyTimeoutFor("SM-F971U"));
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.revealBase(100);p.settings(0,0);
+  p.renderer(true,172);
+  p.opacity(0,false,101,true,true,-1,false);                                   // cover primary
+  assertEquals(1,p.opacity(10,true,101,true,false,-1,false),0);                // switched to inner, OFF
+  assertEquals(1,p.opacity(50,true,101,true,true,-1,false),0);                 // ON at 50
+  assertEquals(1,p.opacity(150,true,101,true,true,-1,false),0);                // 100 ms after ON: no fast reveal when opening
+  int g=HandoffFadePolicy.GLASS_COMMITTED;
+  assertEquals(1,p.opacity(400,true,101,true,true,390,true,g,380),0);          // glass committed at 390: reveal starts
+  assertEquals(.5f,p.opacity(450,true,101,true,true,390,true,g,380),.001);     // half through 100 ms
+  assertEquals(0,p.opacity(510,true,101,true,true,390,true,g,380),0);
+ }
+ @Test public void fold7OpeningStillHasABoundedEscape(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.settings(0,0);p.renderer(true,172);
+  p.opacity(0,false,101,true,true,-1,false);
+  p.opacity(10,true,101,true,true,-1,false);                                   // ON at 10
+  assertEquals(1,p.opacity(600,true,101,true,true,-1,false),0);
+  assertEquals(1,p.opacity(610,true,101,true,true,-1,false),0);                // escape fires at ON+600
+  assertTrue(p.opacity(800,true,101,true,true,-1,false)<1);
+ }
+ @Test public void fold7ClosingKeepsFastReveal(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.settings(0,0);p.renderer(true,172);
+  p.opacity(0,true,94,true,true,-1,true);                                      // inner primary
+  p.opacity(10,false,94,true,true,-1,true);                                    // switched to cover, ON at 10
+  assertEquals(1,p.opacity(50,false,94,true,true,-1,true),0);                  // reveal at ON+40
+  assertTrue(p.opacity(120,false,94,true,true,-1,true)<1);
+ }
+
+ @Test public void fold7ClosingWaitsForCoverGlassSoRevealNeverLandsOnFallback(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.revealBase(100);p.settings(0,0);
+  p.renderer(true,172);p.coverGlass(true);
+  p.opacity(0,true,94,true,true,-1,true);                                      // inner primary
+  p.opacity(10,false,94,true,true,-1,true);                                    // switched to cover, ON at 10
+  assertEquals(1,p.opacity(60,false,94,true,true,-1,true),0);                  // no fast reveal at ON+40 any more
+  int g=HandoffFadePolicy.GLASS_COMMITTED;
+  assertEquals(1,p.opacity(200,false,94,true,true,190,true,g,180),0);          // an INNER commit is not evidence for the cover
+  assertEquals(1,p.opacity(260,false,94,true,true,250,false,g,240),0);         // cover glass committed at 250: reveal starts
+  assertEquals(.5f,p.opacity(310,false,94,true,true,250,false,g,240),.001);
+ }
+ @Test public void fold7ClosingCoverGlassStillHasBoundedEscape(){
+  HandoffFadePolicy p=new HandoffFadePolicy();p.readyTimeout(40);p.openingReadyTimeout(600);p.settings(0,0);p.renderer(true,172);p.coverGlass(true);
+  p.opacity(0,true,94,true,true,-1,true);
+  p.opacity(10,false,94,true,true,-1,true);
+  assertEquals(1,p.opacity(600,false,94,true,true,-1,true),0);
+  assertEquals(1,p.opacity(610,false,94,true,true,-1,true),0);                 // escape at ON+600
+  assertTrue(p.opacity(800,false,94,true,true,-1,true)<1);
+ }
 }

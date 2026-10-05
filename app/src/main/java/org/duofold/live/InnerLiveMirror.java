@@ -72,6 +72,7 @@ final class InnerLiveMirror {
     t.addTransactionCommittedListener(Runnable::run,committed::countDown);
     if(blur!=null){
      Rect bounds=new Rect(Math.round(fit[1]),Math.round(fit[2]),Math.round(fit[1]+sw*fit[0]),Math.round(fit[2]+sh*fit[0]));
+     if(RecordVisible.enabled())RecordVisible.hide(t,blur);
      t.reparent(blur,parent).setLayer(blur,2).setCrop(blur,bounds).setPosition(blur,0,0).setVisibility(blur,true);
      blurRadius.invoke(t,blur,0);
     }

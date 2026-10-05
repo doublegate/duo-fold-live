@@ -30,6 +30,9 @@ final class HandoffFade {
  private final float[] alphas={-1,-1};
  private final int[] stacks={-1,-1},extents={-1,-1};
  private long statusAt;
+ private boolean lastRecord,wasTransitioning;
+ /** elapsedRealtime of the latest detected primary-panel switch; published to the app for an immediate capture. */
+ volatile long switchedAt;
  private static final boolean FAST_SWITCH_TICKS=DeviceCompatibility.isFold7(Build.MODEL);
  private final Choreographer.FrameCallback frame=when->this.tick.run();
  void settings(float smoothing,float gradualness,boolean requireGlass,float open){this.smoothing=smoothing;this.gradualness=gradualness;requireInnerGlass=requireGlass;openThreshold=open;}
@@ -45,7 +48,7 @@ final class HandoffFade {
  private Object dm,wm;private Method info,keyguard,stack,color,crop,colorLayer;
  private volatile boolean ticking;
  volatile String status="Handoff fade idle";
- HandoffFade(){float[] black=HandoffFadePolicy.blackAnglesFor(Build.MODEL);policy.blackAngles(black[0],black[1]);policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));thread.start();handler=new Handler(thread.getLooper());}
+ HandoffFade(){float[] black=HandoffFadePolicy.blackAnglesFor(Build.MODEL);policy.blackAngles(black[0],black[1]);policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.openingReadyTimeout(HandoffFadePolicy.openingReadyTimeoutFor(Build.MODEL));policy.coverGlass(DeviceCompatibility.isFold7(Build.MODEL)&&UnifiedRenderer.enabled());policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));thread.start();handler=new Handler(thread.getLooper());}
  void update(boolean enabled,float angle,boolean fresh){
   long now=SystemClock.elapsedRealtime();if(fresh){this.angle=angle;lastFresh=now;}
   this.enabled=enabled;lease=now;if((!ticking||!enabled)&&wakePending.compareAndSet(false,true))handler.post(start);
@@ -96,9 +99,12 @@ final class HandoffFade {
    Object secondary=info.invoke(dm,1);
    boolean secondaryInner=secondary!=null&&Math.min(value(secondary,"logicalWidth"),value(secondary,"logicalHeight"))/(float)Math.max(value(secondary,"logicalWidth"),value(secondary,"logicalHeight"))>.7f;
    float mirrorAlpha=closingMirror.opacity(now,inner,secondaryInner&&value(secondary,"state")==2,mirrorSubmitted,gradualness);
+   boolean tr=policy.transitioning();if(tr&&!wasTransitioning)switchedAt=now;wasTransitioning=tr;
    if(BuildConfig.DEBUG)trace(now,inner,value(p,"state"),alpha,mirrorAlpha,secondary==null?-1:value(secondary,"state"));
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
     boolean changed=false;
+    boolean record=RecordVisible.enabled();
+    if(record!=lastRecord){lastRecord=record;for(SurfaceControl l:layers)if(l!=null){RecordVisible.hide(t,l);changed=true;}}
     for(int i=0;i<2;i++){
      Object d=i==0?p:secondary;
      float layerAlpha=i==1&&!inner?Math.max(alpha,mirrorAlpha):alpha;
@@ -106,7 +112,7 @@ final class HandoffFade {
      if(layers[i]==null){
       SurfaceControl.Builder builder=new SurfaceControl.Builder().setName("Duo handoff black fade "+i).setHidden(true);
       colorLayer.invoke(builder);layers[i]=builder.build();changed=true;
-      SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,layers[i],true);
+      RecordVisible.hide(t,layers[i]);
       color.invoke(t,layers[i],new float[]{0,0,0});t.setLayer(layers[i],Integer.MAX_VALUE-5);
      }
      int targetStack=value(d,"layerStack");
