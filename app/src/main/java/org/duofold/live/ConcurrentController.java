@@ -13,6 +13,20 @@ final class ConcurrentController {
  private TaskDisplayRouter router;
  private String nativeFailure="";
  private boolean nativeRetried;
+ // Plan A6: the outer (cover, state 5) session is the same override CoverHandoff gates; releasing it before the
+ // base state is CLOSED goes 5->2->0 (sleep). Inner (4) sessions end at open/endpoint and stay ungated.
+ private volatile boolean screenOn=true;private final ReleaseDeferral deferral=new ReleaseDeferral();
+ void screen(boolean on){screenOn=on;}
+ private boolean deferOuter(float angle){
+  long now=SystemClock.elapsedRealtime();
+  boolean outer=owned!=null&&!primaryInner;
+  boolean reopening=Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
+  boolean was=deferral.deferring();
+  if(!deferral.keep(now,outer,screenOn,reopening,BaseDeviceState::closed))return false;
+  if(!was&&BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","dual: defer outer release (angle="+angle+")");
+  status="Waiting for the hinge to report closed before releasing the cover session";
+  return true;
+ }
  synchronized boolean canMirrorSecondary(){return false;}
  synchronized boolean secondaryHasNativeContent(){return owned!=null && !primaryInner && contentInner;}
  String status="Dual-screen mode ready";
@@ -57,9 +71,10 @@ final class ConcurrentController {
  synchronized void update(float angle,boolean fresh,boolean unlocked,boolean primaryIsInner,boolean secondaryReady,int frozenSource,float openThreshold){
   long token=Binder.clearCallingIdentity();long now=SystemClock.elapsedRealtime();
   try{
-   if(!unlocked){releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;return;}
+   if(!unlocked){if(deferOuter(angle))return;releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;return;}
    if(!fresh){
     if(bootstrapping && owned!=null && now-started<3500)return;
+    if(deferOuter(angle))return;
     releaseInternal();bootstrapping=false;
     status="Waiting for fresh angle and outgoing capture";
     return;
@@ -67,9 +82,9 @@ final class ConcurrentController {
    bootstrapping=false;
    if(FoldThreshold.endpoint(angle,openThreshold)){
     if(endpointSince==0)endpointSince=now;
-    if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){releaseInternal();blocked=false;}return;
+    if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(deferOuter(angle))return;releaseInternal();blocked=false;}return;
    }
-   endpointSince=0;
+   endpointSince=0;deferral.reset();
    if(owned==null){if(!blocked&&FoldThreshold.canStart(angle,openThreshold)){if(FreezePolicy.canSwitch(primaryIsInner,frozenSource))begin(FreezePolicy.targetInner(frozenSource),now);else status="Waiting for outgoing frame before switching displays";}return;}
    if(primaryIsInner!=primaryInner && now<mappingDeadline)return;
    if(primaryIsInner!=primaryInner)throw new IllegalStateException("Primary physical display changed during session");
@@ -82,4 +97,14 @@ final class ConcurrentController {
   if(owned!=null){try{cancel.invoke(manager);owned=null;status="Normal display control restored";}catch(Exception e){status="Display release pending";}}
  }
  synchronized void release(){long token=Binder.clearCallingIdentity();try{releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;}finally{Binder.restoreCallingIdentity(token);}}
+ /** External release (effect disallowed, dual mode turned off): the outer session waits for CLOSED (plan A6). */
+ synchronized void releaseGated(float angle){if(deferOuter(angle))return;release();}
+ /** Teardown: bounded wait for CLOSED before cancelling an outer session (plan A3). */
+ synchronized void releaseForTeardown(){
+  long start=SystemClock.elapsedRealtime();
+  while(CloseReleaseGate.waitBeforeTeardown(owned!=null&&!primaryInner,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
+   try{Thread.sleep(BaseDeviceState.CACHE_MS);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}
+  }
+  release();
+ }
 }

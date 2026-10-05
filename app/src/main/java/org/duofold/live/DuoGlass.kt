@@ -11,6 +11,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 
 /** AGSL adaptation of chuspeeism/iphone-duo's screenColor: 25 weighted taps,
  * 72px progressive radius, projected UI rays and edge darkening. MIT notice bundled. */
+/** Render age limit for live glass frames (per device; readiness keeps its own freshness window). */
+private val glassMaxAge=GlassFramePolicy.maxAgeFor(android.os.Build.MODEL)
 internal object DuoGlassShader {
  val source="""
  uniform shader content;
@@ -39,6 +41,7 @@ internal object DuoGlassShader {
  uniform float horizontal;
  uniform float reverse;
  uniform float intensity;
+ uniform float maxDarken;
  uniform float blurStrength;
  uniform float seamOffset;
  uniform float reflectedCover;
@@ -185,7 +188,7 @@ internal object DuoGlassShader {
   }
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
-  color*=half(1.0-min(1.0,effect*2.0*intensity));
+  color*=half(1.0-min(maxDarken,effect*2.0*intensity));
   float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
@@ -200,6 +203,11 @@ internal object DuoGlassShader {
  AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
+ private val unifiedLeft=UnifiedRenderer.enabled()
+ private val fallbackColors=IntArray(65)
+ private val switchAngle=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1]
+ // Plan E5: the fully-open endpoint uses the same freshness window as the reveal readiness (700 ms on the Fold 7).
+ private val endpointFreshMs=HandoffFadePolicy.freshWindowFor(android.os.Build.MODEL)
  private var hingeAngle=Float.NaN
  private var targetAngle=Float.NaN
  private var renderedAngle=Float.NaN
@@ -207,7 +215,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var angleListening=false
  private var paintedEffect=false
  private var fallbackReason=""
- private fun fallback(reason:String){if(reason!=fallbackReason){if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
+ private fun fallback(reason:String){if(reason!=fallbackReason && BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoFallback","${if(inner) "inner" else "cover"}${if(reflectedCover) " reflected" else ""}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");if(reason!=fallbackReason){if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
  private val clearGuard=object:Runnable{override fun run(){
   if(!holder.surface.isValid)return
   if(paintedEffect && (!LiveAngles.fresh() || !LiveAngles.effectAllowed || (!inner && targetAngle<=0f))){
@@ -255,10 +263,14 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var readinessGeneration=0
  private var readinessPending=false
  private var lastReadyCapture=-1L
+ private var surfaceAt=0L
  private var lastReadyEndpoint=-1L
  /** Tie readiness to this SurfaceView's next buffer, not its parent UI draw. */
  private fun trackReadyFrame(rendered:GlassFrame?,endpoint:Boolean){
-  if(preview || frozen || !inner || readinessPending)return
+  if(preview || frozen || reflectedCover || readinessPending)return
+  // Cover: report while the reveal may still be waiting (first 1.5 s of this surface), on each new capture,
+  // so one rejected report cannot strand the black until the cap. Inner: every new capture, as upstream.
+  if(!inner && SystemClock.elapsedRealtime()-surfaceAt>1500)return
   val now=SystemClock.elapsedRealtime()
   if(endpoint){if(now-lastReadyEndpoint<50)return}
   else if(rendered==null || rendered.stamp==lastReadyCapture)return
@@ -270,8 +282,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      if(gen==readinessGeneration && holder.surface.isValid){
       readinessPending=false
       if(endpoint)lastReadyEndpoint=SystemClock.elapsedRealtime() else lastReadyCapture=rendered!!.stamp
-      HandoffFadeFrames.committed(true,rendered?.stamp ?: -1,endpoint)
-      if(endpoint)PreviewTransition.innerEndpointCommitted() else if(rendered!=null)PreviewTransition.innerFrameSubmitted(rendered)
+      HandoffFadeFrames.committed(inner,rendered?.stamp ?: -1,endpoint)
+      if(inner){if(endpoint)PreviewTransition.innerEndpointCommitted() else if(rendered!=null)PreviewTransition.innerFrameSubmitted(rendered)}
      }
     }
     applyTransactionToFrame(transaction)
@@ -313,10 +325,18 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   val selected=context.getSharedPreferences("standalone",0).getString("animation_style","duo")=="classic"
   if(selected!=classic){classic=selected;bitmap=null;program=runCatching{RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}.getOrElse{RecoveryLog.add("Glass shader compilation failed: ${it.message}");null}}
   requestDraw()}
+ // Only the primary live glass may reset the shared capture (GlassFrames.frame is global): frozen outgoing
+ // snapshots, the reflected strip and secondary-display surfaces wiped the primary frame at the switch (plan B7).
+ // Live frames come from one display (GlassFrames captures display 1 in continuity-native mode). The reflected
+ // strip mirrors the cover (display 0); every other surface draws the panel it is on (plan B8).
+ private fun sourceDisplay()=if(reflectedCover)0 else (display?.displayId ?: 0)
+ private val scratchSize=Point()
+ private fun sourceSize(out:Point):Point{context.getSystemService(DisplayManager::class.java).getDisplay(sourceDisplay())?.getRealSize(out);return out}
+ private fun ownsLiveCapture()=!reflectedCover && !frozen && (display?.displayId ?: 0)==0
  override fun surfaceCreated(h:SurfaceHolder){
   if(!preview){
    GlassFrames.surface(this,surfaceControl)
-   if(!reflectedCover)GlassFrames.requestFreshCapture()
+   if(ownsLiveCapture())GlassFrames.requestFreshCapture()
    if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)
    smoothingMs=FrameSmoothing.sanitize(context.getSharedPreferences("standalone",0).getFloat("smoothing_ms",30f))
   openThreshold=context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
@@ -325,7 +345,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   updateBufferSize();preferFastRefresh();requestDraw()
   if(!preview){removeCallbacks(clearGuard);postDelayed(clearGuard,100)}
  }
- override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
+ override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){surfaceAt=SystemClock.elapsedRealtime();readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(ownsLiveCapture())GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
  override fun surfaceDestroyed(h:SurfaceHolder){removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
  private fun drawFrame(){
   if(!holder.surface.isValid || width<=0 || height<=0)return
@@ -339,24 +359,27 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     canvas.scale(canvas.width.toFloat()/width,canvas.height.toFloat()/height)
     if(reflectedCover){
      canvas.translate(width.toFloat(),0f);canvas.scale(-1f,1f)
-     frame?.let{cover->if(PreviewExpansionPolicy.fresh(cover.stamp,SystemClock.elapsedRealtime()))canvas.drawBitmap(cover.bitmap,null,RectF(0f,0f,width.toFloat(),height.toFloat()),basePaint)}
+     // Same uniform scale as the half-pane mirror (plan B4): the reflection is its exact mirror image.
+     frame?.let{cover->if(PreviewExpansionPolicy.fresh(cover.stamp,SystemClock.elapsedRealtime())){val r=if(unifiedLeft)LiveMirrorLayout.fill(cover.bitmap.width,cover.bitmap.height,width,height) else null;canvas.drawBitmap(cover.bitmap,null,if(r!=null)RectF(r[1],r[2],r[1]+cover.bitmap.width*r[0],r[2]+cover.bitmap.height*r[0]) else RectF(0f,0f,width.toFloat(),height.toFloat()),basePaint)}}
     }
     if(preview && frame!=null)canvas.drawBitmap(frame!!.bitmap,null,RectF(0f,0f,width.toFloat(),height.toFloat()),null)
     if(amount<=.003f || (!preview && (!LiveAngles.fresh() || !LiveAngles.effectAllowed || (!inner && targetAngle<=0f)))){
      paintedEffect=false;fallback("")
      endpoint=!preview && inner && LiveAngles.fresh() && LiveAngles.effectAllowed && targetAngle.isFinite() && targetAngle>=FoldThreshold.sanitize(openThreshold)
-     if(endpoint){
-      val current=Point();context.getSystemService(DisplayManager::class.java).getDisplay(0)?.getRealSize(current)
+     // Fully closed: the cover clears to the native screen, which is the reveal destination.
+     if(!preview && !inner && !reflectedCover && LiveAngles.fresh() && targetAngle.isFinite() && targetAngle<=0f){endpoint=true;rendered=null}
+     if(endpoint && inner){
+      val current=sourceSize(scratchSize)
       val content=frame
-      if(content!=null && GlassFramePolicy.usable(content.stamp,SystemClock.elapsedRealtime(),content.width,content.height,current.x,current.y))rendered=content else endpoint=false
+      if(content!=null && content.display==sourceDisplay() && GlassFramePolicy.usable(content.stamp,SystemClock.elapsedRealtime(),content.width,content.height,current.x,current.y,endpointFreshMs))rendered=content else endpoint=false
      }
      return@runCatching
     }
     paintedEffect=true
     val f=frame
-    val size=Point()
-    if(!preview && !frozen)context.getSystemService(DisplayManager::class.java).getDisplay(0)?.getRealSize(size)
-    val fresh=f!=null && (preview || frozen || (GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
+    val size=scratchSize.apply{set(0,0)}
+    if(!preview && !frozen)sourceSize(size)
+    val fresh=f!=null && (preview || frozen || (f.display==sourceDisplay() && GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y,glassMaxAge)))
     val shader=program
     if(fresh && shader!=null && f!=null){
      fallback("")
@@ -374,20 +397,23 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      }
      val fallback=inner && f.width.toFloat()/f.height<.7f
      // Match the live cover mirror exactly so blur never jumps between two content crops.
-     val projectedCover=!inner && minOf(f.width,f.height).toFloat()/maxOf(f.width,f.height)>.7f
+     val projectedCover=(!inner && minOf(f.width,f.height).toFloat()/maxOf(f.width,f.height)>.7f) || (reflectedCover && unifiedLeft)
      val fit=if(projectedCover)LiveMirrorLayout.fill(f.bitmap.width,f.bitmap.height,width,height) else null
      val scale=fit?.get(0) ?: if(fallback)minOf(width.toFloat()/f.bitmap.width,height.toFloat()/f.bitmap.height) else 0f
      val ew=if(fallback || projectedCover)f.bitmap.width*scale else width.toFloat();val eh=if(fallback || projectedCover)f.bitmap.height*scale else height.toFloat()
      val quality=context.getSharedPreferences("standalone",0)
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
-     shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
-     shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",if(inner).9f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(inner).9f else 2.7f})
-     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",if(inner).45f else 1.25f).let{if(it.isFinite())it.coerceIn(if(inner)0f else .8f,1.5f) else if(inner).45f else 1.25f} else .8f)
-     if(!classic)shader.setFloatUniform("verticalCompression",quality.getFloat(if(inner)"inner_vertical_compression" else "cover_vertical_compression",if(inner).6f else 1.15f).let{if(it.isFinite())it.coerceIn(0f,2f) else if(inner).6f else 1.15f})
-     shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(inner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
+     shader.setFloatUniform("blurStrength",RenderQuality.blur(quality.getFloat("blur_strength",.3f))*(if(reflectedCover && unifiedLeft && hingeAngle.isFinite())StripPose.blurFactor(hingeAngle,UnifiedTuning.reflectMaxHinge(),switchAngle) else 1f))
+     // Unified mode: the left-strip reflection uses the inner profile so its perspective matches the post-switch leaf.
+     val tuneInner=inner || (reflectedCover && unifiedLeft)
+     shader.setFloatUniform("earlyStretch",quality.getFloat(if(tuneInner)"inner_early_stretch" else "early_stretch",if(tuneInner).9f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(tuneInner).9f else 2.7f})
+     shader.setFloatUniform("endStretch",if(quality.getBoolean(if(tuneInner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(tuneInner)"inner_end_stretch" else "end_stretch",if(tuneInner).45f else 1.25f).let{if(it.isFinite())it.coerceIn(if(tuneInner)0f else .8f,1.5f) else if(tuneInner).45f else 1.25f} else .8f)
+     if(!classic)shader.setFloatUniform("verticalCompression",quality.getFloat(if(tuneInner)"inner_vertical_compression" else "cover_vertical_compression",if(tuneInner).6f else 1.15f).let{if(it.isFinite())it.coerceIn(0f,2f) else if(tuneInner).6f else 1.15f})
+     shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(tuneInner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
+     if(!classic)shader.setFloatUniform("maxDarken",if(unifiedLeft)UnifiedTuning.maxDarken() else 1f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
      shader.setFloatUniform("texSize",f.bitmap.width.toFloat(),f.bitmap.height.toFloat())
      shader.setFloatUniform("origin",if(fallback)width-ew else 0f,if(fallback)(height-eh)/2f else 0f)
@@ -395,8 +421,12 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("sampleOffset",if(fit!=null)-fit[1]/ew else 0f,if(fit!=null)-fit[2]/eh else 0f)
      shader.setFloatUniform("extent",if(projectedCover)width.toFloat() else ew,if(projectedCover)height.toFloat() else eh);shader.setFloatUniform("progress",amount.coerceIn(0f,1f));shader.setFloatUniform("intensity",intensity)
      // Inner progress already includes the user's fully-open threshold (default 172°).
+     val coverHinge=(if(hingeAngle.isFinite())hingeAngle.coerceIn(0f,180f) else amount*110f).let{
+      // Unified: the left reflection must not fold edge-on at 90 deg (it collapsed ~0.6 s before the switch).
+      // Plan B2: ease from the cap to the post-switch pose instead of freezing at the cap.
+      if(reflectedCover && unifiedLeft)StripPose.hinge(it,UnifiedTuning.reflectMaxHinge(),switchAngle,FoldThreshold.sanitize(openThreshold)) else it}
      val radians=if(inner) amount.coerceIn(0f,1f)*(Math.PI.toFloat()/2f) else
-      Math.PI.toFloat()-(if(hingeAngle.isFinite())hingeAngle.coerceIn(0f,180f) else amount*110f)*(Math.PI.toFloat()/180f)
+      Math.PI.toFloat()-coverHinge*(Math.PI.toFloat()/180f)
      if(!classic)shader.setFloatUniform("foldRadians",radians)
      shader.setFloatUniform("inner",if(inner)1f else 0f);shader.setFloatUniform("fallback",if(fallback)1f else 0f)
      shader.setFloatUniform("horizontal",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270)1f else 0f)
@@ -408,9 +438,12 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      // Honest, live black-fade fallback; never leave stale captured content visible.
      val horizontal=rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270
      val reversed=rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180
-     val colors=IntArray(65){i->var x=i/64f;if(reversed)x=1f-x;val edge=if(inner)1f-2*x else x;Color.argb((255*DuoShadeCurve.alpha(amount,edge,intensity)).toInt(),0,0,0)}
-     paint.shader=LinearGradient(0f,0f,if(horizontal)0f else width.toFloat(),if(horizontal)height.toFloat() else 0f,colors,null,Shader.TileMode.CLAMP)
-     canvas.drawRect(0f,0f,width.toFloat(),height.toFloat(),paint)
+     if(GlassFallbackPolicy.draws(amount)){
+      val cap=!classic&&unifiedLeft;val maxDarken=if(cap)UnifiedTuning.maxDarken() else 1f
+      for(i in 0..64){var x=i/64f;if(reversed)x=1f-x;val edge=if(inner)1f-2*x else x;fallbackColors[i]=Color.argb((255*GlassFallbackPolicy.alpha(DuoShadeCurve.alpha(amount,edge,intensity),cap,maxDarken)).toInt(),0,0,0)}
+      paint.shader=LinearGradient(0f,0f,if(horizontal)0f else width.toFloat(),if(horizontal)height.toFloat() else 0f,fallbackColors,null,Shader.TileMode.CLAMP)
+      canvas.drawRect(0f,0f,width.toFloat(),height.toFloat(),paint)
+     }
     }
    }finally{
     // Only successful glass rendering or a deliberate fully-open clear qualifies.

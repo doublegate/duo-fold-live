@@ -1,3 +1,46 @@
+## Unreleased — Galaxy Z Fold 7 (SM-F966) on Android 16
+
+Adds support for the Galaxy Z Fold 7 family on Android 16 / One UI 8.5 and the fixes found while tuning it on an
+SM-F966U1 against frame-by-frame recordings of both panels. Fold 7 values are gated by
+`DeviceCompatibility.isFold7`; every other model keeps the current values unless marked **all models**. Full value
+list: `docs/fold7/tuning-reference.md`; audit findings and rationale: `docs/fold7/remediation-plan-2026-10-04.md`.
+
+Compatibility
+- Accept Android 16 (SDK 36) on the SM-F966 family only; Android 17 stays required elsewhere. The Android 16
+  framework on SM-F966U1 contains every hidden class the app reflects into, and FoldInteractive answers angle
+  commands there.
+
+Panel switch (Fold 7)
+- Full black at the measured switch angles (94 deg closing, 101 deg opening), reveal only on a real glass frame of
+  the new panel (opening cap ON+600 ms, closing ON+380 ms), 100 ms reveal, per-frame re-checks during a switch,
+  700 ms fresh-content window (the first post-switch capture takes up to ~400 ms there).
+- Unified renderer (`debug.duofold.unified`, default on for the Fold 7): before the switch the inner panel's left half
+  is drawn by the same perspective glass shader as after it (mirrored cover), with the pose eased so progress, blur and
+  darkening are equal at the switch; the right half is a flat live mirror of the cover filling exactly the right half,
+  with a hinge-driven compositor blur that continues after the switch (`RightHalfBlur`) on the left glass's curve.
+- Glass frames survive a failed capture for up to 1.5 s instead of dropping to the empty fallback.
+
+Display overrides (all models)
+- `CloseReleaseGate`: a concurrent display override (state 5 / 4) is released only once the base device state is
+  CLOSED (or on reopening, screen off, or after 3 s). Releasing it while the hinge still reports HALF_OPENED goes
+  5->2->0, which Samsung treats as a sleep transition and blanks the cover. Every release path is gated: the cover
+  hold, Fold-Only/Unfold-Only mode changes, dual mode, reader teardown, the continuity probe, and a system cancel
+  (which now also allows a re-request).
+
+Performance and robustness (all models)
+- Angle polling 4 ms while moving (or briefly in the 80-115 deg band), 33 ms at rest; glass content capture at the
+  configured rate while moving and 10 fps at rest; settled shade loops stop requesting frames; keyguard and display
+  queries cached off the per-frame paths. Measured at rest on SM-F966U1 (app + service, % of one core): Flex
+  ~43 -> ~20, closed ~13 -> ~7.
+- Service races fixed: live-mirror attach vs revoke/stop (generation ticket, non-blocking revoke, attach outside the
+  reader monitor and on its own IPC thread), bounded `settings` subprocesses, rotation-hold hand-over after a restart,
+  Shizuku destroy waiting outside the monitor, blur ticker reset on its own thread.
+
+Diagnostics
+- `fold7test` build type (release-optimized, debug-signed, diagnostic logs) and `BuildConfig.DIAGNOSTICS` for the
+  `Duo*` log tags; `debug.duofold.record_visible`, `preview_blur_*`, `right_blur_clear`, `reflect_max_hinge`,
+  `max_darken` debug properties (documented in the tuning reference).
+
 ## 1.6.0 — Tested performance release
 
 Promotes 1.6.0-alpha.4 behavior unchanged. Only stable version metadata and release documentation differ.

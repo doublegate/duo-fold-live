@@ -26,6 +26,11 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /** The outgoing panel shows only its own pre-switch frame; incoming content stays native. */
 internal class SecondaryShade(private val service:AccessibilityService,display:Display,private val intensity:Float,private val preview:Boolean=false,private val nativeContent:Boolean=false,private val event:(String)->Unit):Presentation(service,display,android.R.style.Theme_Material_NoActionBar){
+ private val unified=preview && UnifiedRenderer.enabled()
+ // Plan B3/B9: the half-pane layout and the strip assume both panels in their natural orientation (the strip
+ // width came from the physical cover aspect while the mirror fits logical sizes).
+ private val upright:Boolean get()=display.rotation==android.view.Surface.ROTATION_0 &&
+  (service.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(0)?.rotation ?: android.view.Surface.ROTATION_0)==android.view.Surface.ROTATION_0
  private val life=OverlayOwner()
  private var compose:ComposeView?=null
  private var coverAspect=.63f
@@ -58,11 +63,14 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
        override fun onFrame(active:Boolean,strength:Float){this@SecondaryShade.strength=strength}
       },intensity,true)
      }else if(preview){
-      AndroidView(factory={LivePanelSurface(it){ok,note->mirrorReady=ok;PreviewTransition.previewReady(ok);if(ok && !leftStarted){leftStarted=true;event("Right preview committed; starting reflected left preview")};event(note)}.also{mirrorView=it}},modifier=Modifier.fillMaxSize())
+      AndroidView(factory={LivePanelSurface(it,unified&&upright){ok,note->mirrorReady=ok;PreviewTransition.previewReady(ok);if(ok && !leftStarted){leftStarted=true;event("Right preview committed; starting reflected left preview")};event(note)}.also{mirrorView=it}},modifier=Modifier.fillMaxSize())
       BoxWithConstraints(Modifier.fillMaxSize()){
        // Geometry must not depend on the shared frame: surface creation clears that frame.
-       val left=maxWidth-maxHeight*coverAspect
-       if(!frostedReflection && leftStarted && left.value>0 && coverAspect<.7f){
+       // Unified mode: perspective glass on exactly the left half (the post-switch glass covers the same half);
+       // the right pane stays flat (mirror filling the right half + blur). Otherwise the upstream strip.
+       val half=unified&&upright
+       val left=if(half)maxWidth/2 else maxWidth-maxHeight*coverAspect
+       if((!frostedReflection || unified) && upright && leftStarted && left.value>0 && coverAspect<.7f){
         Box(Modifier.fillMaxHeight().width(left)){
          DuoLiveShade(object:StandaloneFoldHost{
           override fun onMovement(){}
