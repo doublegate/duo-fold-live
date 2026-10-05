@@ -8,11 +8,18 @@ package org.duofold.live;
  */
 final class RightHalfBlur {
  private RightHalfBlur(){}
- /** Max radius at or below {@code switchAngle}, smoothstep to 0 at {@code clearAngle}. */
+ /** Max radius at or below {@code switchAngle}, easing to 0 at {@code clearAngle} on the left glass's curve. */
  static float radius(float angle,float switchAngle,float clearAngle,float max){
   if(!Float.isFinite(angle)||!Float.isFinite(max)||max<=0||!(clearAngle>switchAngle))return 0;
   float limit=Math.min(max,PreviewBlurPolicy.MAX_RADIUS);
-  float t=Math.max(0,Math.min(1,(clearAngle-angle)/(clearAngle-switchAngle)));
-  return limit*t*t*(3-2*t);
+  // Same easing as the left glass (inner progress spans clear -> 90 deg, DuoShadeCurve), normalized so the
+  // value at the switch angle is exactly the mirror's maximum and clamped to it between 94 and 101 deg.
+  float atSwitch=ease(clearAngle,switchAngle);
+  return atSwitch<=0?0:Math.min(limit,limit*ease(clearAngle,angle)/atSwitch);
+ }
+ static final float LEFT_SPAN_END=90;
+ private static float ease(float clearAngle,float angle){
+  float t=Math.max(0,Math.min(1,(clearAngle-angle)/(clearAngle-LEFT_SPAN_END)));
+  return t*t*(3-2*t);
  }
 }

@@ -17,4 +17,15 @@ public class RightHalfBlurTest {
   assertEquals(0f,RightHalfBlur.radius(120,101,172,0),0);
   assertEquals(0f,RightHalfBlur.radius(120,172,101,56),0);
  }
+ // Plan B5: after the switch both halves lose blur at the same rate. The left glass shader's blur scales with
+ // smoothstep((clear-a)/(clear-90)) (DuoShadeCurve inner progress); the right half follows that curve, rescaled so
+ // it is exactly the mirror maximum at the switch angle.
+ @Test public void followsTheLeftGlassCurveAfterTheSwitch(){
+  float ref=RightHalfBlur.radius(130,101,172,56);
+  for(float a:new float[]{110,120,140,150,160}){
+   float expected=ref*left(a)/left(130);
+   assertEquals(expected,RightHalfBlur.radius(a,101,172,56),0.01f);
+  }
+ }
+ private static float left(float a){float p=Math.max(0,Math.min(1,(172-a)/(172-90f)));return p*p*(3-2*p);}
 }

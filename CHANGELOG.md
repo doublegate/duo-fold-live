@@ -1,3 +1,52 @@
+## 3.5.2-a16.9 — One geometry and one blur curve on both sides of each switch (fork, Phase B)
+
+Plan Phase B (items B1-B10) plus F1. Fold 7 unified renderer only unless marked **all models**. Verified by unit
+tests only (on-device verification follows the full plan).
+
+Geometry: perspective and sizing
+
+- The inner panel's flat right pane is exactly the right half before the switch, during the post-switch hold and
+  after the switch. The live cover mirror now fills the right half (`LiveMirrorLayout.rightHalf`: scale 984/1080,
+  ~56 px cropped top and bottom; it was fitted to 1032..1968), the left perspective strip covers exactly 0..984, and
+  the hold's right frame and reflected left copy use the same layout. Before, the pane edge moved 48 px at the
+  switch (B3).
+- The left-strip reflection is drawn with the same uniform scale as the mirror, so it is that frame's exact mirror
+  image; it was stretched 0.956 x 0.867 (features ~10 % wider than in the mirror) (B4).
+- The strip's pose no longer freezes at the 55 deg anti-collapse cap and then jumps at the reveal. `StripPose` eases
+  the leaf from the cap to the pose whose shader progress equals the inner glass's at the switch angle (101 deg),
+  and ramps the strip blur factor to the inner model's x1.25, so leaf progress, motion, blur radius and edge
+  darkening are continuous across the switch while the leaf never reaches edge-on. (The alternative, drawing the
+  strip with the inner leaf model, needs a texture remap that cannot be validated off-device; recorded in the plan.)
+  (B2)
+- The strip and the half-pane layout are used only with both panels in their natural orientation; in landscape the
+  strip's physical-aspect width did not match the logically fitted mirror (B9).
+
+Blur
+
+- After the switch the right half loses blur on the same curve as the left glass (`smoothstep((172-a)/(172-90))`),
+  rescaled to the mirror's maximum at the switch; it was blurrier through mid-opening (0.65 vs 0.52 at 130 deg) (B5).
+- `BlurTuning`: one 1 s-cached, sanitized source for `debug.duofold.preview_blur_max|start|smooth_ms` and
+  `right_blur_clear`, used by the mirror, the hold and the right half, and the right half now uses the configured
+  glide instead of a fixed 40 ms. A `setprop` mid-session gave different maxima on the two sides of the switch (B10).
+
+Frames and captures
+
+- The no-frame fallback gradient respects the unified darkening cap (0.55); it reached solid black, flashing the left
+  half near-black whenever a frame was missing (B6). Below 6 % glass amount it draws nothing (it was drawn at the
+  endpoints at 0.4-5 %, invisibly) (F1).
+- **All models:** only the primary live glass resets the shared capture; frozen snapshots, the reflected strip and
+  secondary-display surfaces wiped the primary frame at the switch in dual/native modes (B7).
+- **All models:** each glass frame records the display it was captured from, and a surface accepts only frames from
+  its source display (the reflected strip: display 0; others: their own). In continuity-native mode display-1 frames
+  were checked against display 0 and never rendered (B8).
+- **All models:** Duo's main glass surfaces are held by the service (`MainGlassSurfaces`) and stay skipped from
+  screenshots only while the live cover->inner mirror is attached (skip-screenshot doubles as the mirror exclusion).
+  With `debug.duofold.record_visible=1` the glass is recorded again whenever the mirror is not live, and is then
+  excluded from Duo's own capture explicitly; captures no longer change what the user sees (B1).
+
+Tests: StripGeometryTest (right-half fill, reflection scale, pose identity/continuity/monotonic, blur factor),
+RightHalfBlurTest (left-curve match), GlassFallbackPolicyTest, BlurTuningTest, MainGlassSurfacesTest.
+
 ## 3.5.2-a16.8 — Every display-override release waits for the hinge to report closed (fork, Phase A)
 
 Plan Phase A (`docs/fold7/remediation-plan-2026-10-04.md`, items A1-A8). Releasing a concurrent display override

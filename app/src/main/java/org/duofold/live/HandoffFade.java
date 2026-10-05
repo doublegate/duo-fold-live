@@ -38,9 +38,8 @@ final class HandoffFade {
  // Right-half blur continuity (RightHalfBlur): one effect layer on the inner panel while it is primary.
  private static final boolean RIGHT_BLUR=DeviceCompatibility.isFold7(Build.MODEL);
  private SurfaceControl rightBlur;private Method effectLayer,blurRadius;
- // blurClear: angle where the right half is sharp again; -1 = open threshold (172). Tunable without a rebuild:
- // adb shell setprop debug.duofold.right_blur_clear 150 (read when the fade engine starts).
- private float blurShown=Float.NaN,blurSwitch=101,blurMax=56,blurClear=-1;private long blurAt;private int blurApplied=-1,blurStack=-1;private String blurCrop="";
+ // Max, glide and clear angle come from BlurTuning (shared with the mirror and the hold, 1 s cache).
+ private float blurShown=Float.NaN,blurSwitch=101;private long blurAt;private int blurApplied=-1,blurStack=-1;private String blurCrop="";
  private long keyguardAt=-1;private boolean keyguardLocked;
  private void schedule(){
   // Idle (no switch, fully clear): no per-vsync work. A new angle wakes the tick at once (update()).
@@ -56,7 +55,7 @@ final class HandoffFade {
  private Object dm,wm;private Method info,keyguard,stack,color,crop,colorLayer;
  private volatile boolean ticking;
  volatile String status="Handoff fade idle";
- HandoffFade(){float[] black=HandoffFadePolicy.blackAnglesFor(Build.MODEL);policy.blackAngles(black[0],black[1]);policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.openingReadyTimeout(HandoffFadePolicy.openingReadyTimeoutFor(Build.MODEL));policy.coverGlass(DeviceCompatibility.isFold7(Build.MODEL)&&UnifiedRenderer.enabled());policy.closingReadyTimeout(HandoffFadePolicy.closingReadyTimeoutFor(Build.MODEL));policy.freshWindow(HandoffFadePolicy.freshWindowFor(Build.MODEL));policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));blurSwitch=black[1];blurMax=floatProp("debug.duofold.preview_blur_max",56);blurClear=floatProp("debug.duofold.right_blur_clear",-1);thread.start();handler=new Handler(thread.getLooper());}
+ HandoffFade(){float[] black=HandoffFadePolicy.blackAnglesFor(Build.MODEL);policy.blackAngles(black[0],black[1]);policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.openingReadyTimeout(HandoffFadePolicy.openingReadyTimeoutFor(Build.MODEL));policy.coverGlass(DeviceCompatibility.isFold7(Build.MODEL)&&UnifiedRenderer.enabled());policy.closingReadyTimeout(HandoffFadePolicy.closingReadyTimeoutFor(Build.MODEL));policy.freshWindow(HandoffFadePolicy.freshWindowFor(Build.MODEL));policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));blurSwitch=black[1];thread.start();handler=new Handler(thread.getLooper());}
  void update(boolean enabled,float angle,boolean fresh){
   long now=SystemClock.elapsedRealtime();boolean moved=fresh&&Float.compare(angle,this.angle)!=0;if(fresh){this.angle=angle;lastFresh=now;}
   this.enabled=enabled;lease=now;if((!ticking||!enabled||(idle&&moved))&&wakePending.compareAndSet(false,true))handler.post(start);
@@ -141,10 +140,6 @@ final class HandoffFade {
   }catch(Exception e){clear();status="Handoff fade unavailable: "+e.getClass().getSimpleName()+": "+e.getMessage();}
  }};
  private boolean blurMoving;
- private static float floatProp(String key,float fallback){
-  try{String v=(String)Class.forName("android.os.SystemProperties").getMethod("get",String.class,String.class).invoke(null,key,"");
-   return v==null||v.isEmpty()?fallback:Float.parseFloat(v);}catch(Exception e){return fallback;}
- }
  /** Glides the right-half blur toward RightHalfBlur.radius at display rate; true when the transaction changed. */
  private boolean rightHalfBlur(SurfaceControl.Transaction t,long now,boolean inner,Object p)throws Exception{
   boolean upright=inner&&value(p,"rotation")==0;
@@ -156,10 +151,11 @@ final class HandoffFade {
    if(rightBlur!=null&&blurApplied!=0){blurRadius.invoke(t,rightBlur,0);t.setVisibility(rightBlur,false);blurApplied=0;return true;}
    return false;
   }
-  float target=RightHalfBlur.radius(angle,blurSwitch,blurClear>0?blurClear:openThreshold,blurMax);
+  float clear=BlurTuning.rightClear();
+  float target=RightHalfBlur.radius(angle,blurSwitch,clear>0?clear:openThreshold,BlurTuning.max());
   if(rightBlur==null&&target<1){blurShown=Float.NaN;blurMoving=false;return false;}
   // Start at the target (the switch is under black); afterwards follow the 2-3 deg hinge steps smoothly.
-  blurShown=Float.isFinite(blurShown)?PreviewBlurPolicy.glide(blurShown,target,now-blurAt,40):target;blurAt=now;
+  blurShown=Float.isFinite(blurShown)?PreviewBlurPolicy.glide(blurShown,target,now-blurAt,BlurTuning.smoothMs()):target;blurAt=now;
   blurMoving=Math.abs(blurShown-target)>=.5f;
   boolean changed=false;
   if(rightBlur==null){

@@ -19,11 +19,11 @@ Effective angle maps <= 2 deg to 0, which fires 9-103 ms before the base state r
 | --- | --- | --- | --- |
 | Tooling | — | Done | Lint baseline + warnings-as-errors, `.editorconfig`, markdownlint, ruff (commit `chore(tooling)`). |
 | A | 3.5.2-a16.8 | Done | A1-A8 implemented test-first; C3 (cached, rate-limited base-state query) landed with it. A3: the client still unbinds with `remove=true`; the service-side bounded teardown wait covers the destroy it triggers. |
-| B | — | Planned | |
+| B | 3.5.2-a16.9 | Done | B1-B10 and F1. B2 uses the pose blend (progress, motion, blur and darkening equal at the switch) rather than switching the strip to the inner leaf model, which needs a texture remap that cannot be validated off-device. B3 also aligns the post-switch hold. |
 | C | — | Planned | C3 done in Phase A. |
 | D | — | Planned | |
 | E | — | Planned | E1, E2, E6 done with the plan itself. |
-| F | — | Planned | |
+| F | — | Planned | F1 done in Phase B. |
 
 ## Results that motivated this plan
 

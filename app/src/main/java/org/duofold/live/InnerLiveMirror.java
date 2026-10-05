@@ -28,11 +28,7 @@ final class InnerLiveMirror {
  private final Runnable restart=()->{tickAt=SystemClock.uptimeMillis()-8;frame.run();};
  private void wake(){if(!ticking&&blur!=null){ticking=true;tick.post(restart);}}
  String status="Cover live mirror idle";
- /** Debug-tunable over adb: setprop debug.duofold.preview_blur_max 56 (px), ..._start 0 (deg), ..._smooth_ms 40. */
- private static float prop(String key,float fallback){
-  try{String v=(String)Class.forName("android.os.SystemProperties").getMethod("get",String.class,String.class).invoke(null,key,"");
-   return v==null||v.isEmpty()?fallback:Float.parseFloat(v);}catch(Exception e){return fallback;}
- }
+ /** Tuning (max/start/glide) comes from BlurTuning, shared with the hold and the right-half blur. */
  /** Called for every fresh angle; follows the hinge with a compositor background blur over the preview. */
  void blur(float angle){target=angle;wake();}
  private void apply(SurfaceControl layer,float angle){
@@ -47,7 +43,9 @@ final class InnerLiveMirror {
   IBinder b=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,name);
   return Class.forName(stub).getMethod("asInterface",IBinder.class).invoke(null,b);
  }
- synchronized Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed){
+ synchronized Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed){return attach(id,parent,width,height,allowed,false);}
+ /** halfPane (unified renderer, plan B3): fill exactly the right half so the pane boundary matches the post-switch glass. */
+ synchronized Bundle attach(int id,SurfaceControl parent,int width,int height,boolean allowed,boolean halfPane){
   long identity=Binder.clearCallingIdentity();Bundle result=new Bundle();attaching.set(true);
   try{
    close();
@@ -64,9 +62,9 @@ final class InnerLiveMirror {
    boolean accepted=(boolean)Class.forName("android.view.IWindowManager").getMethod("mirrorDisplay",int.class,SurfaceControl.class).invoke(wm,0,mirror);
    if(!accepted||!mirror.isValid())throw new IllegalStateException("WindowManager refused live mirror");
    if(Math.min(sw,sh)/(float)Math.max(sw,sh)>.7f || Math.min(dw,dh)/(float)Math.max(dw,dh)<=.7f)throw new IllegalStateException("Cover-to-inner preview only");
-   float[] fit=LiveMirrorLayout.fit(sw,sh,width,height);
-   blurStart=prop("debug.duofold.preview_blur_start",0);blurMax=prop("debug.duofold.preview_blur_max",56);
-   blurEnd=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1];lastBlur=-1;blurTau=prop("debug.duofold.preview_blur_smooth_ms",40);shown=Float.NaN;
+   float[] fit=halfPane?LiveMirrorLayout.rightHalf(sw,sh,width,height):LiveMirrorLayout.fit(sw,sh,width,height);
+   blurStart=BlurTuning.start();blurMax=BlurTuning.max();
+   blurEnd=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1];lastBlur=-1;blurTau=BlurTuning.smoothMs();shown=Float.NaN;
    try{
     SurfaceControl.Builder b=new SurfaceControl.Builder().setName("Duo preview progressive blur");
     SurfaceControl.Builder.class.getMethod("setEffectLayer").invoke(b);
@@ -94,6 +92,7 @@ final class InnerLiveMirror {
   result.putString("status",status);return result;
  }
  synchronized void detach(int id){if(owner==id)close();}
+ boolean attached(){return mirror!=null;}
  private final java.util.concurrent.atomic.AtomicBoolean attaching=new java.util.concurrent.atomic.AtomicBoolean();
  /** From the angle poll: close unless an attach is in flight (the next poll, 4 ms later, closes it then). */
  void revoke(){if(attaching.get())return;if(mirror!=null||blur!=null)close();}

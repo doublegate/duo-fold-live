@@ -2,7 +2,7 @@ package org.duofold.live
 import android.content.Context
 import android.view.*
 /** Retry startup ordering and rebuild mirrors after animation exclusion is confirmed. */
-internal class LivePanelSurface(context:Context,private val result:(Boolean,String)->Unit):SurfaceView(context),SurfaceHolder.Callback {
+internal class LivePanelSurface(context:Context,private val halfPane:Boolean=false,private val result:(Boolean,String)->Unit):SurfaceView(context),SurfaceHolder.Callback {
  private var id=0;private var generation=0;private var active=false;private var pending=false;private var attached=false
  private var mirrorWidth=0;private var mirrorHeight=0;private var revision=-1
  private var since=0L;private var lastWait=""
@@ -16,7 +16,7 @@ internal class LivePanelSurface(context:Context,private val result:(Boolean,Stri
   if(!pending && (!ready || revision!=PreviewTransition.exclusionRevision) && id!=0){LiveAngles.detachMirror(id);id=0;attached=false;result(false,"Waiting for clean preview setup")}
   if(ready && !pending && !attached){
    pending=true;val gen=generation;val requestedRevision=PreviewTransition.exclusionRevision
-   id=LiveAngles.attachMirror(surfaceControl,mirrorWidth,mirrorHeight){ok,note->
+   id=LiveAngles.attachMirror(surfaceControl,mirrorWidth,mirrorHeight,halfPane){ok,note->
     if(gen==generation){dlog("attach "+(if(ok)"OK" else "FAILED")+": "+note);pending=false;attached=ok;revision=requestedRevision;result(ok,note);if(!ok){removeCallbacks(retry);postDelayed(retry,100)}}
    }
   }

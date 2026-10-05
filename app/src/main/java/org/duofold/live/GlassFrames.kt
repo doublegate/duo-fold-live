@@ -4,7 +4,8 @@ import android.os.*
 import android.view.SurfaceControl
 import androidx.compose.runtime.*
 import java.util.concurrent.Executors
-internal data class GlassFrame(val bitmap:Bitmap,val width:Int,val height:Int,val stamp:Long,val levels:List<Bitmap> = emptyList())
+/** [display]: logical display the frame was captured from (plan B8); frozen snapshots default to 0. */
+internal data class GlassFrame(val bitmap:Bitmap,val width:Int,val height:Int,val stamp:Long,val levels:List<Bitmap> = emptyList(),val display:Int=0)
 internal object GlassFrames {
  var frame by mutableStateOf<GlassFrame?>(null);private set
  var status by mutableStateOf("Glass renderer ready");private set
@@ -51,7 +52,7 @@ internal object GlassFrames {
    main.post{pending=false;if(gen==generation && clients>0 && !suspended && captureDisplay==(if(LiveAngles.continuityNative)1 else 0)){
     val bitmap=capturedBitmap
     if(SystemClock.elapsedRealtime()<urgentUntil)dlog("capture "+(if(response?.getBoolean("ok")==true)"ok" else "FAIL: $message")+" +"+(SystemClock.elapsedRealtime()-requestedAt)+"ms surfaces=${valid.size} display=$captureDisplay")
-    if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · ${response.getString("backend") ?: "layer capture"}"}
+    if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid,captureDisplay);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · ${response.getString("backend") ?: "layer capture"}"}
     else if(GlassFramePolicy.keepOnFailure(frame!=null,SystemClock.elapsedRealtime()-(frame?.stamp?:0L))){dlog("capture FAIL (frame kept): $message");main.postDelayed(this,GlassFramePolicy.RETRY_WITH_FRAME_MS);return@post}
     else{frame=null;status="Glass unavailable; debug-style fallback: $message";dlog("capture FAIL (frame cleared): $message")}
     main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(targetFps,SystemClock.elapsedRealtimeNanos()-started))

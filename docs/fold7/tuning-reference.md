@@ -17,6 +17,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | 3.5.2-a16.6 | (device-only test build) | CloseReleaseGate, readiness fixes, precapture removal; committed as part of a16.7. |
 | 3.5.2-a16.7 | `8a39812` | Gated close, glass frame retention, RightHalfBlur, adaptive polling, stall fixes, `fold7test`. |
 | 3.5.2-a16.8 | Phase A | Every override release gated (mode, teardown, dual, probe, cancel, direct inner). |
+| 3.5.2-a16.9 | Phase B | Right-half geometry, strip pose blend, shared blur curve and tuning, capture fidelity. |
 
 ## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
 
@@ -48,7 +49,8 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | --- | --- | --- | --- |
 | Unified mode | on | off | The glass shader draws the inner left strip before the switch, so perspective corners, blur and timing are continuous. |
 | Left-strip perspective profile | inner profile (early/end stretch, vertical compression, startup easing) | cover profile | Matches the post-switch leaf; the inner sliders tune both sides. |
-| Reflection maximum hinge | 55 deg | — | The reflection folded edge-on and collapsed ~0.6 s before the switch. |
+| Reflection maximum hinge | 55 deg, then eased (`StripPose`) to the inner pose at the switch (hinge 77.9 deg at 101 deg; blur factor 1 -> 1.25) | — | Edge-on collapse ~0.6 s before the switch; holding the cap froze the strip for ~46 deg and jumped at the reveal. |
+| Pane layout | left strip 0..w/2, mirror fills w/2..w (scale 984/1080, centered, ~56 px cropped top/bottom); reflection same uniform scale; hold same layout; upright panels only | strip w - h*coverAspect, mirror fitted | The pane edge moved 48 px at the switch; the reflection was stretched ~10 %. |
 | Glass edge darkening cap | 0.55 | 1.0 | Blacked the panel out around 104-114 deg while closing. |
 | Mirrored-hold fade at reveal | 0 ms when ready, else 120 ms | 120 ms | Removed a double exposure at the cut-over. |
 
@@ -57,7 +59,8 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | Value | Fold 7 | Why |
 | --- | --- | --- |
 | Preview mirror blur, opening (before the switch) | smoothstep 0 px at 0 deg to 56 px at 101 deg, glide time constant 40 ms, 8 ms ticks while moving | The full-resolution compositor mirror stayed sharp, then jumped to the blurred glass. |
-| Right-half blur after the switch | 56 px at 101 deg, smoothstep to 0 at the open threshold (172 deg); 0 at once when the cover is primary or the panel is rotated | The glass shader leaves the inner right half transparent, exposing the sharp native screen; the blur jumped 56 px -> 0 across the black. |
+| Right-half blur after the switch | 56 px at 101 deg, then the left glass's curve `smoothstep((172-a)/(172-90))` rescaled to that maximum, 0 at the open threshold; glide = `preview_blur_smooth_ms`; 0 at once when the cover is primary or the panel is rotated | The glass shader leaves the inner right half transparent, exposing the sharp native screen; the blur jumped 56 px -> 0 across the black, and then eased faster than the left half. |
+| No-frame fallback | darkening capped at 0.55 (unified); nothing drawn below 6 % glass amount | The fallback reached solid black and was drawn invisibly at the endpoints. |
 
 ## Display overrides (`CloseReleaseGate`, `CoverHandoff`, `ConcurrentController`, `BaseDeviceState`) — all models
 
@@ -86,13 +89,13 @@ Shell-writable (`adb shell setprop <name> <value>`); no rebuild needed. Read whe
 | `debug.duofold.unified` | on (Fold 7), off elsewhere | per decision | `1`/`0` forces the unified renderer on or off. |
 | `debug.duofold.reflect_max_hinge` | 55 | cached 1 s | Maximum hinge angle used for the left-strip reflection. |
 | `debug.duofold.max_darken` | 0.55 | cached 1 s | Glass edge darkening cap in unified mode. |
-| `debug.duofold.preview_blur_start` | 0 | per mirror attach | Angle where the preview mirror blur starts. |
-| `debug.duofold.preview_blur_max` | 56 | per attach / prepare; right half once per fade session | Maximum preview and right-half blur radius in px. |
-| `debug.duofold.preview_blur_smooth_ms` | 40 | per mirror attach | Glide time constant of the preview mirror blur. |
-| `debug.duofold.right_blur_clear` | open threshold (172) | once per fade session | Angle where the right half is sharp again after the switch. |
-| `debug.duofold.record_visible` | 0 | cached 1 s, applied live | `1` keeps Duo's overlay layers visible to screen recordings (fade, hold, blur, mirror blur); Duo's main glass stays skipped because skip-screenshot is also its mirror exclusion. |
+| `debug.duofold.preview_blur_start` | 0 | `BlurTuning`, cached 1 s (applied per mirror attach) | Angle where the preview mirror blur starts. |
+| `debug.duofold.preview_blur_max` | 56 | `BlurTuning`, cached 1 s (mirror per attach, hold per prepare, right half live) | Maximum preview, hold and right-half blur radius in px. |
+| `debug.duofold.preview_blur_smooth_ms` | 40 | `BlurTuning`, cached 1 s | Glide time constant of the mirror and right-half blur. |
+| `debug.duofold.right_blur_clear` | open threshold (172) | `BlurTuning`, cached 1 s | Angle where the right half is sharp again after the switch. |
+| `debug.duofold.record_visible` | 0 | cached 1 s, applied live | `1` keeps Duo's overlay layers visible to screen recordings (fade, hold, blur, mirror blur, right-half blur) and the main glass whenever the cover->inner mirror is not attached (skip-screenshot doubles as the mirror exclusion); recorded layers are excluded from Duo's own capture. |
 
-Read-once properties and mismatched read times are plan item B10.
+All blur properties are read through `BlurTuning` (plan B10).
 
 ## Build types
 

@@ -28,12 +28,13 @@ public final class LiveAngles {
  private static volatile LiveAngles current;
  private static int mirrorSerial;
  public interface MirrorCallback {void ready(boolean ok,String status);}
- public static int attachMirror(SurfaceControl parent,int width,int height,MirrorCallback callback){
+ public static int attachMirror(SurfaceControl parent,int width,int height,MirrorCallback callback){return attachMirror(parent,width,height,false,callback);}
+ public static int attachMirror(SurfaceControl parent,int width,int height,boolean halfPane,MirrorCallback callback){
   int id=++mirrorSerial;LiveAngles self=current;
   if(self==null||!self.running||self.mirrorWorker==null){callback.ready(false,"Angle reader unavailable");return id;}
   self.mirrorWorker.post(()->{
    Parcel p=Parcel.obtain(),r=Parcel.obtain();boolean ok=false;String message;
-   try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);p.writeTypedObject(parent,0);p.writeInt(width);p.writeInt(height);
+   try{p.writeInterfaceToken(AngleReader.DESCRIPTOR);p.writeInt(id);p.writeTypedObject(parent,0);p.writeInt(width);p.writeInt(height);p.writeInt(halfPane?1:0);
     IBinder binder=self.reader;if(binder==null||!binder.transact(4,p,r,0))throw new IllegalStateException("Mirror reader unavailable");
     r.readException();Bundle b=r.readBundle(LiveAngles.class.getClassLoader());ok=b.getBoolean("ok");message=b.getString("status");
    }catch(Exception e){message="Mirror error: "+e.getClass().getSimpleName()+": "+e.getMessage();}

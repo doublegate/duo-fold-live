@@ -123,10 +123,7 @@ final class PreviewExpansion extends Binder {
   status="Reflected left hold prepared; clean right and unfold center blur ready";
   if(!polling){polling=true;handler.post(tick);}
  }
- private static float holdBlurProp(){
-  try{String v=(String)Class.forName("android.os.SystemProperties").getMethod("get",String.class,String.class).invoke(null,"debug.duofold.preview_blur_max","");
-   return v==null||v.isEmpty()?56:Math.max(0,Math.min(PreviewBlurPolicy.MAX_RADIUS,Float.parseFloat(v)));}catch(Exception e){return 56;}
- }
+ private static float holdBlurProp(){return BlurTuning.max();}
  private void prepareSeam(Bitmap blurred,Object target,float fraction)throws Exception{
   if(fraction<=0){if(seam!=null)try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(seam,false).apply();}seamPixels=0;return;}
   int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");float fit=Math.min(w/(float)bw,h/(float)bh);
@@ -163,18 +160,22 @@ final class PreviewExpansion extends Binder {
    int stack=number(target,"layerStack"),panelState=number(target,"state");
    if(stack!=lastStack || panelState!=lastPanelState){lastStack=stack;lastPanelState=panelState;event("Inner stack="+stack+" state="+panelState);}
    int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
-   float fit=Math.min(w/(float)bw,h/(float)bh);
-   float leftWidth=Math.max(0f,w-bw*fit);
+   // Unified Fold 7 (plan B3/B4): same right-half layout and uniform scale as the live mirror and the strip, so the
+   // pane boundary sits at w/2 before the switch, during this hold and after it.
+   boolean half=unified&&DeviceCompatibility.isFold7(android.os.Build.MODEL);
+   float fit=half?LiveMirrorLayout.rightHalf(bw,bh,w,h)[0]:Math.min(w/(float)bw,h/(float)bh);
+   float leftWidth=half?w/2f:Math.max(0f,w-bw*fit);
+   float holdTop=(h-bh*fit)/2f;
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,layer,number(target,"layerStack"));
     SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,layer,fit,0f,0f,fit);
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,backdrop,number(target,"layerStack"));
-    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,backdrop,leftWidth/bw,0f,0f,h/(float)bh);
+    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,backdrop,half?fit:leftWidth/bw,0f,0f,half?fit:h/(float)bh);
     // The left copy is visible BEFORE handoff. Never hide either layer merely because
     // Android reports a transient OFF state during the physical panel remap.
     boolean record=RecordVisible.enabled();
     if(record!=lastRecord){lastRecord=record;RecordVisible.hide(t,backdrop);RecordVisible.hide(t,layer);if(seam!=null)RecordVisible.hide(t,seam);if(holdBlur!=null)RecordVisible.hide(t,holdBlur);}
-    t.setPosition(backdrop,0,0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady && !unified)) && leftWidth>0);
+    t.setPosition(backdrop,0,half?holdTop:0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady && !unified)) && leftWidth>0);
     t.setPosition(layer,leftWidth,(h-bh*fit)/2f).setAlpha(layer,alpha).setVisibility(layer,start>0);
     if(holdBlur!=null&&holdBlurRadius!=null){
      // Same compositor blur as the live preview, so the frozen right frame continues its look.
