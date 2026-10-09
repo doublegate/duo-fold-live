@@ -18,11 +18,11 @@ final class ConcurrentController {
  private volatile boolean screenOn=true;private final ReleaseDeferral deferral=new ReleaseDeferral();
  void screen(boolean on){screenOn=on;}
  private boolean deferOuter(float angle,boolean fresh){
-  boolean outer=owned!=null&&!primaryInner;
+  boolean hasSession=owned!=null;
   // Only a FRESH sample proves reopening: a stale 100 deg reading says nothing about a hinge still closing.
   boolean reopening=fresh&&Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
-  if(!deferral.keep(SystemClock.elapsedRealtime(),outer,screenOn,reopening,BaseDeviceState::closed))return false;
-  status="Waiting for the hinge to report closed before releasing the cover session";
+  if(!deferral.keep(SystemClock.elapsedRealtime(),hasSession,screenOn,reopening,BaseDeviceState::closed))return false;
+  status="Waiting for the hinge to report closed before releasing the display session";
   return true;
  }
  synchronized boolean canMirrorSecondary(){return false;}
@@ -98,7 +98,7 @@ final class ConcurrentController {
  /** Teardown: bounded wait for CLOSED before cancelling an outer session. */
  synchronized void releaseForTeardown(){
   long start=SystemClock.elapsedRealtime();
-  while(CloseReleaseGate.waitBeforeTeardown(owned!=null&&!primaryInner,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
+  while(CloseReleaseGate.waitBeforeTeardown(owned!=null,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
    try{Thread.sleep(BaseDeviceState.CACHE_MS);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}
   }
   release();

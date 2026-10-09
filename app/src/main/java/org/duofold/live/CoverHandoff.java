@@ -74,9 +74,9 @@ final class CoverHandoff {
   }catch(Exception e){owned=previous;innerHeld=previousInner;releaseOwned();Throwable root=e;while(root.getCause()!=null)root=root.getCause();status="Handoff unavailable: "+root.getClass().getSimpleName()+": "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(identity);}
  }
- /** True = keep the cover override for now (CloseReleaseGate). Only applies to the cover override. */
+ /** True = keep an override for now (CloseReleaseGate). */
  private boolean gatedRelease(float angle,boolean fresh){
-  if(owned==null||innerHeld)return false;
+  if(owned==null)return false;
   boolean reopening=fresh&&Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
   // Cheap escapes first inside ReleaseDeferral: the base-state query is a system_server call on the poll.
   return deferral.keep(SystemClock.elapsedRealtime(),true,screenOn,reopening,BaseDeviceState::closed);
@@ -89,7 +89,7 @@ final class CoverHandoff {
  /** Reader stop / Shizuku destroy / restart: wait, bounded, for CLOSED before cancelling. */
  synchronized void releaseForTeardown(){
   long start=SystemClock.elapsedRealtime();
-  while(CloseReleaseGate.waitBeforeTeardown(owned!=null&&!innerHeld,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
+  while(CloseReleaseGate.waitBeforeTeardown(owned!=null,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
    try{Thread.sleep(BaseDeviceState.CACHE_MS);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}
   }
   release();

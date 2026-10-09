@@ -19,12 +19,12 @@ public class CloseReleaseGateTest {
   assertTrue(CloseReleaseGate.allow(false,true,true,0));          // reopened past the handoff
   assertTrue(CloseReleaseGate.allow(false,false,false,0));        // not interactive: nothing to blank
  }
- // DirectHandoffPolicy's angle<=0 RELEASE of the cover override must pass the gate like every other release.
- @Test public void directReleaseOfCoverOverrideIsGated(){
+ // DirectHandoffPolicy's angle<=0 RELEASE of either override must pass the gate.
+ @Test public void directReleaseOfBothOverridesIsGated(){
   assertTrue(CloseReleaseGate.gates(DirectHandoffPolicy.RELEASE,false));
+  assertTrue(CloseReleaseGate.gates(DirectHandoffPolicy.RELEASE,true));
  }
- @Test public void innerOverrideAndNonReleaseActionsAreNotGated(){
-  assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.RELEASE,true));
+ @Test public void nonReleaseActionsAreNotGated(){
   assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.HOLD,false));
   assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.INNER,false));
  }
