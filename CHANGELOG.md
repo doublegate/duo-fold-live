@@ -6,6 +6,7 @@ SM-F966U1 against frame-by-frame recordings of both panels. Fold 7 values are ga
 list: `docs/fold7/tuning-reference.md`; audit findings and rationale: `docs/fold7/remediation-plan-2026-10-04.md`.
 
 Compatibility
+- Gate both inner-primary and cover-primary session releases on base device state, matching the generic fixes in PR #17; fresh reopening, screen-off, and bounded-timeout escapes remain available.
 - Accept Android 16 (SDK 36) on the SM-F966 family only; Android 17 stays required elsewhere. The Android 16
   framework on SM-F966U1 contains every hidden class the app reflects into, and FoldInteractive answers angle
   commands there.

@@ -21,11 +21,11 @@ public class CloseReleaseGateTest {
  }
  // 2026-10-04 capture: the only sleep close released through DirectHandoffPolicy's angle<=0 RELEASE, which
  // bypassed the gate (0 defers logged all run). Every release of the cover override must be gated.
- @Test public void directReleaseOfCoverOverrideIsGated(){
+ @Test public void directReleaseOfBothOverridesIsGated(){
   assertTrue(CloseReleaseGate.gates(DirectHandoffPolicy.RELEASE,false));
+  assertTrue(CloseReleaseGate.gates(DirectHandoffPolicy.RELEASE,true));
  }
- @Test public void innerOverrideAndNonReleaseActionsAreNotGated(){
-  assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.RELEASE,true));
+ @Test public void nonReleaseActionsAreNotGated(){
   assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.HOLD,false));
   assertFalse(CloseReleaseGate.gates(DirectHandoffPolicy.INNER,false));
  }

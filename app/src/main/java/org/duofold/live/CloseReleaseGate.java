@@ -23,8 +23,8 @@ final class CloseReleaseGate {
  static boolean waitBeforeTeardown(boolean held,boolean baseClosed,boolean screenOn,long elapsedMs){
   return held&&!baseClosed&&screenOn&&elapsedMs<MAX_DEFER_MS;
  }
- /** Whether a DirectHandoffPolicy action releases the cover override, and so must pass allow() first. */
+ /** Whether a DirectHandoffPolicy action releases an override, and so must pass allow() first. */
  static boolean gates(int directAction,boolean innerHeld){
-  return directAction==DirectHandoffPolicy.RELEASE&&!innerHeld;
+  return directAction==DirectHandoffPolicy.RELEASE;
  }
 }

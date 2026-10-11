@@ -14,18 +14,18 @@ final class ConcurrentController {
  private String nativeFailure="";
  private boolean nativeRetried;
  // Plan A6: the outer (cover, state 5) session is the same override CoverHandoff gates; releasing it before the
- // base state is CLOSED goes 5->2->0 (sleep). Inner (4) sessions end at open/endpoint and stay ungated.
+ // base state is CLOSED goes 5->2->0 (sleep). Gate every owned session, including inner-primary.
  private volatile boolean screenOn=true;private final ReleaseDeferral deferral=new ReleaseDeferral();
  void screen(boolean on){screenOn=on;}
  private boolean deferOuter(float angle,boolean fresh){
   long now=SystemClock.elapsedRealtime();
-  boolean outer=owned!=null&&!primaryInner;
+  boolean hasSession=owned!=null;
   // Only a FRESH sample proves reopening: a stale 100 deg reading says nothing about a hinge still closing.
   boolean reopening=fresh&&Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
   boolean was=deferral.deferring();
-  if(!deferral.keep(now,outer,screenOn,reopening,BaseDeviceState::closed))return false;
+  if(!deferral.keep(now,hasSession,screenOn,reopening,BaseDeviceState::closed))return false;
   if(!was&&BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoState","dual: defer outer release (angle="+angle+")");
-  status="Waiting for the hinge to report closed before releasing the cover session";
+  status="Waiting for the hinge to report closed before releasing the display session";
   return true;
  }
  synchronized boolean canMirrorSecondary(){return false;}
@@ -103,7 +103,7 @@ final class ConcurrentController {
  /** Teardown: bounded wait for CLOSED before cancelling an outer session (plan A3). */
  synchronized void releaseForTeardown(){
   long start=SystemClock.elapsedRealtime();
-  while(CloseReleaseGate.waitBeforeTeardown(owned!=null&&!primaryInner,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
+  while(CloseReleaseGate.waitBeforeTeardown(owned!=null,BaseDeviceState.closed(),screenOn,SystemClock.elapsedRealtime()-start)){
    try{Thread.sleep(BaseDeviceState.CACHE_MS);}catch(InterruptedException e){Thread.currentThread().interrupt();break;}
   }
   release();
