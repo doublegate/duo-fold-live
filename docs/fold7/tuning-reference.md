@@ -2,7 +2,9 @@
 
 Every value this change sets for the Galaxy Z Fold 7 (SM-F966 family, detected by
 `DeviceCompatibility.isFold7`), every debug property it reads, and what each was measured against. Device:
-SM-F966U1, One UI 8.5, Android 16 (SDK 36); inner panel 1968x2184, cover 1080x2520, both 420 dpi. Every other
+SM-F966U1, One UI 8.5, Android 16 (SDK 36); inner panel 1968x2184, cover 1080x2520, both 420 dpi. The values
+were measured there. After the phone's update to One UI 9.0 / Android 17 (SDK 37), the panels, display ids, device
+states and hinge sensors were the same, and the values were kept unchanged. Every other
 model keeps the upstream value in the "Upstream" column. Values marked **all models** apply everywhere.
 
 ## Panel-switch fade (`HandoffFadePolicy`, `HandoffFade`)
