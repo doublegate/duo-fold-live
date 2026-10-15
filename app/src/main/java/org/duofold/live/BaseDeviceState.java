@@ -29,16 +29,22 @@ final class BaseDeviceState {
      if("CLOSED".equals(state.getClass().getMethod("getName").invoke(state)))closedId=(int)state.getClass().getMethod("getIdentifier").invoke(state);
    }
    if(closedId<0)return cached=true;
-   if(service==null){
-    IBinder b=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
-    service=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,b);
-    info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo");
-   }
-   Object state=info.invoke(service);
+   Object state=info();
    if(baseField==null)baseField=state.getClass().getField("baseState");
    Object base=baseField.get(state);
    if(identifier==null)identifier=base.getClass().getMethod("getIdentifier");
    return cached=(int)identifier.invoke(base)==closedId;
-  }catch(Exception e){service=null;return cached=true;}
+  }catch(Exception e){return cached=true;}
+ }
+ /** Uncached DeviceStateInfo (currentState, baseState) from the device_state service; the stub is resolved once. */
+ static synchronized Object info()throws Exception{
+  try{
+   if(service==null){
+    IBinder b=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
+    info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo");
+    service=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,b);
+   }
+   return info.invoke(service);
+  }catch(Exception e){service=null;throw e;}
  }
 }

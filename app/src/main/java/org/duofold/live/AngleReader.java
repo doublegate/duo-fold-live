@@ -7,7 +7,7 @@ public class AngleReader extends Binder {
  private GlassCapture capture;
  private PreviewExpansion expansion;
  private volatile HandoffFade fade;
- private FoldRotationHold rotation,retiringRotation;
+ private FoldRotationHold rotation,retiringRotation;private long retiringSince;
  private String recoveryApk;
  private final ClosedHingeGate closedHingeGate=new ClosedHingeGate();
  private final AnimationModePolicy animationMode=new AnimationModePolicy();
@@ -82,7 +82,8 @@ public class AngleReader extends Binder {
    appEnabled=appEnabled&&effectAllowed;
    // Plan D6: a new hold only after the previous one restored rotation and dropped its file lock; creating it
    // earlier failed with "Another orientation hold is active" and left ~2 s with no hold after a restart.
-   if(rotation==null&&(retiringRotation==null||retiringRotation.released())){retiringRotation=null;rotation=new FoldRotationHold(caller/100000,recoveryApk);}
+   // Bounded like awaitRelease(): after 8 s a stuck old hold no longer blocks a new one.
+   if(rotation==null&&(retiringRotation==null||retiringRotation.released()||heartbeat-retiringSince>8000)){retiringRotation=null;rotation=new FoldRotationHold(caller/100000,recoveryApk);}
    if(rotation!=null){rotation.screenshotRelease(dual&&screenshotStartup);rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);}
    if(fade==null)fade=new HandoffFade();
    fade.settings(fadeSmoothing,fadeGradualness,mirrorMode&&!debug,openThreshold,handoffAngle);
@@ -112,7 +113,7 @@ public class AngleReader extends Binder {
    b.putBoolean("effectAllowed",effectAllowed);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);reply.writeNoException();reply.writeBundle(b);return true;}
   if(code==3){stop();reply.writeNoException();return true;}return super.onTransact(code,data,reply,flags);
  }
- private synchronized void stop(){closedHingeGate.reset();previewAllowed=false;if(rotation!=null){rotation.close();retiringRotation=rotation;rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.shutdown();mainGlass.close();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
+ private synchronized void stop(){closedHingeGate.reset();previewAllowed=false;if(rotation!=null){rotation.close();retiringRotation=rotation;retiringSince=SystemClock.elapsedRealtime();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.shutdown();mainGlass.close();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
  private synchronized void start(String action){
   stop();int reaped=OrphanReaders.reap();if(reaped>0)android.util.Log.w("DuoReady","reaped "+reaped+" orphaned angle reader(s)");logLines=matchingResponses=staleResponses=0;count=0;unique.clear();angle=Float.NaN;min=180;max=0;last=0;raw="";state="Starting log reader";final int gen=generation;
   Thread reader=new Thread(()->{

@@ -103,9 +103,7 @@ final class CoverHandoff {
   try{
    init();
    if(toInner && innerId<0)throw new IllegalStateException("Inner concurrent state missing");
-   IBinder binder=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
-   Object service=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
-   Object info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo").invoke(service);
+   Object info=BaseDeviceState.info();
    Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
    if(owned==null && !current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Another display override is active");
    event("REQUEST "+(toInner?"inner":"cover")+" id="+(toInner?innerId:coverId)+" current="+current.getClass().getMethod("getIdentifier").invoke(current)+" base="+base.getClass().getMethod("getIdentifier").invoke(base));

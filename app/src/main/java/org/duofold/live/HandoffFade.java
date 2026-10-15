@@ -138,6 +138,7 @@ final class HandoffFade {
     if(rightHalfBlur(t,now,inner,p))changed=true;
     if(changed)t.apply();
    }
+   // Idle only when nothing fades and the hinge is at rest (not resting-in-band within PollCadence's hold).
    idle=!policy.transitioning()&&alpha<=0f&&mirrorAlpha<=0f&&!blurMoving&&!PollCadence.fast(now-lastMovedAt,angle);  // C1: not while resting in the band
    if(now>=statusAt){statusAt=now+250;status="Handoff fade: "+Math.round(alpha*100)+"%; primary="+(inner?"inner":"cover")+"; "+(policy.transitioning()?"destination black/reveal":"angle fade")+"; "+policy.readiness+"; glass commit settle 2 ms; legacy ON settle 32 ms; reveal "+policy.revealMs(gradualness)+" ms";}
    schedule();
