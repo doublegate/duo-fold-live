@@ -11,6 +11,10 @@ Display overrides (cover blanking on close)
 - The base-state query is cached (reflection resolved once, at most one system call per 16 ms) and made only after the cheap escapes.
 - The closing-mirror black mask deactivates 1.8 s after the secondary panel is gone; it stayed active for as long as the phone was closed and could start the next opening masked.
 
+Android 17 hidden-API access
+
+- Android 17 denies app-process reflection on `ViewRootImpl.getSurfaceControl()` (`hiddenapi: ... api=blocked ... using reflection: denied`). With the cover preview on, `PreviewTransition.markAnimation` failed for Duo's main overlay window, so that window was never excluded from the live preview mirror, and the call was retried every 500 ms for as long as the preview ran. The two screenshot-mode root lookups failed in the same way. All three now resolve the window surface through HiddenApiBypass (`WindowSurface`), which the app already ships. Verified on Android 17 / One UI 9.0: no denials, no retry loop, and every mirror attach succeeded.
+
 Service concurrency
 
 - Live mirror attach (which waits up to 250 ms for its commit) runs outside the angle reader's lock and on its own IPC thread in the app, so the 4 ms poll that drives the fade and the cover hold no longer stalls behind it. An attach that races a revoke or reader stop closes what it built instead of leaving the mirror attached; the poll's revoke never blocks.
