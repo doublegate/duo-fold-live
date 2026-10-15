@@ -143,9 +143,8 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             if(view!==compose||!compose.isAttachedToWindow)return
             if(!settings().getBoolean("screenshot_camera_startup",false))return
             val registered=runCatching{
-                val root=View::class.java.getDeclaredMethod("getViewRootImpl").invoke(compose)
-                val sc=root.javaClass.getMethod("getSurfaceControl").invoke(root) as android.view.SurfaceControl
-                if(!sc.isValid)throw IllegalStateException("Overlay root not ready")
+                val sc=WindowSurface.of(compose)
+                if(sc==null||!sc.isValid)throw IllegalStateException("Overlay root not ready")
                 GlassFrames.surface(compose,sc)
             }.isSuccess
             if(!registered)compose.postDelayed(this,100)

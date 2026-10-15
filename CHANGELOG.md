@@ -1,7 +1,7 @@
-## Unreleased — Galaxy Z Fold 7 (SM-F966) on Android 16
+## Unreleased — Galaxy Z Fold 7 (SM-F966) on Android 16 and Android 17
 
-Adds support for the Galaxy Z Fold 7 family on Android 16 / One UI 8.5 and the fixes found while tuning it on an
-SM-F966U1 against frame-by-frame recordings of both panels. Fold 7 values are gated by
+Adds support for the Galaxy Z Fold 7 family on Android 16 / One UI 8.5 and Android 17 / One UI 9.0, and the fixes
+found while tuning it on an SM-F966U1 against frame-by-frame recordings of both panels. Fold 7 values are gated by
 `DeviceCompatibility.isFold7`; every other model keeps the current values unless marked **all models**. Full value
 list: `docs/fold7/tuning-reference.md`; audit findings and rationale: `docs/fold7/remediation-plan-2026-10-04.md`.
 
@@ -10,6 +10,10 @@ Compatibility
 - Accept Android 16 (SDK 36) on the SM-F966 family only; Android 17 stays required elsewhere. The Android 16
   framework on SM-F966U1 contains every hidden class the app reflects into, and FoldInteractive answers angle
   commands there.
+- Verified on the same SM-F966U1 after its update to Android 17 / One UI 9.0 (`CP2A.260605.016`): every hidden
+  framework member the app reflects into resolves with the expected signature, FoldInteractive still logs
+  `mCurrentAngle`, and open/close cycles run the full handoff (angles, captures on both panels, fade, close-release
+  gate, live mirror). The one Android 17 denial found is fixed above.
 
 Panel switch (Fold 7)
 - Full black where the panels actually switch: closing at the hold angle, opening 3 deg after the handoff angle
@@ -28,6 +32,12 @@ Display overrides (all models)
   5->2->0, which Samsung treats as a sleep transition and blanks the cover. Every release path is gated: the cover
   hold, Fold-Only/Unfold-Only mode changes, dual mode, reader teardown, the continuity probe, and a system cancel
   (which now also allows a re-request).
+
+Android 17 hidden-API access (all models)
+- Android 17 denies app-process reflection on `ViewRootImpl.getSurfaceControl()` (`api=blocked ... using reflection:
+  denied`). With the cover preview on, Duo's main overlay window was never excluded from the live preview mirror and
+  the lookup was retried every 500 ms; the two screenshot-mode lookups failed the same way. All three now go through
+  HiddenApiBypass (`WindowSurface`). From PR #17.
 
 Performance and robustness (all models)
 - Angle polling 4 ms while moving (or briefly in the 80-115 deg band), 33 ms at rest; glass content capture at the
