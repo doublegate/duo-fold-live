@@ -13,13 +13,9 @@ import java.util.zip.ZipOutputStream
 internal object WallpaperFiles {
  fun photoFile(c:Context)=File(c.filesDir,"chosen-home-background.jpg")
  fun savePhoto(c:Context,uri:Uri):Bitmap{
-  val bitmap=ImageDecoder.decodeBitmap(ImageDecoder.createSource(c.contentResolver,uri)){decoder,info,_->
-   val largest=maxOf(info.size.width,info.size.height)
-   if(largest>1920)decoder.setTargetSampleSize((largest+1919)/1920)
-   decoder.allocator=ImageDecoder.ALLOCATOR_SOFTWARE
-  }
+  val bitmap=WallpaperPhoto.decode(c,uri)
   val tmp=File(c.filesDir,"chosen-home-background.tmp")
-  tmp.outputStream().use{check(bitmap.compress(Bitmap.CompressFormat.JPEG,92,it)){"Could not save image"}}
+  tmp.outputStream().use{check(bitmap.compress(Bitmap.CompressFormat.JPEG,100,it)){"Could not save image"}}
   check(tmp.renameTo(photoFile(c))){"Could not store selected image"}
   return bitmap
  }

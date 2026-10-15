@@ -18,7 +18,8 @@ public class FoldSettingsService extends Binder {
   Bundle out=new Bundle();long identity=Binder.clearCallingIdentity();
   try{
    if("always".equals(action))FoldRotationHold.recoverAbandoned(user);
-   if("fold_wake".equals(action)){out.putString("value",foldWake(original));out.putBoolean("ok",true);}
+   if("fold_prepare".equals(action)){preparePower();out.putString("value","power API ready; no wake requested");out.putBoolean("ok",true);}
+   else if("fold_wake".equals(action)){out.putString("value",foldWake(original));out.putBoolean("ok",true);}
    else if("rotation_migrate".equals(action)){out.putString("value",migrateRotation(user,original));out.putBoolean("ok",true);}
    else if("rotation_repair".equals(action)){out.putString("value",FoldRotationHold.repairAutoRotate(user));out.putBoolean("ok",true);}
    else if(action.startsWith("decor_")){out=decor(action,original);}else{
@@ -33,17 +34,32 @@ public class FoldSettingsService extends Binder {
   }catch(Exception e){out.putString("error",e.toString());}finally{Binder.restoreCallingIdentity(identity);}
   reply.writeNoException();reply.writeBundle(out);return true;
  }
- private static String foldWake(String armed)throws Exception{
-  long started=Long.parseLong(armed),now=SystemClock.uptimeMillis();
-  if(!FoldWakePolicy.recent(started,now))throw new IllegalStateException("Fold wake lease expired");
+ private Object wakePower;
+ private java.lang.reflect.Method interactiveMethod,sleepReasonMethod,wakeMethod;
+ private void preparePower()throws Exception{
+  if(wakePower!=null)return;
   IBinder binder=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"power");
-  Class<?> api=Class.forName("android.os.IPowerManager");Object power=Class.forName("android.os.IPowerManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
-  if((boolean)api.getMethod("isInteractive").invoke(power))return "Already awake; no wake requested";
-  int reason=(int)api.getMethod("getLastSleepReason").invoke(power);
+  Class<?> api=Class.forName("android.os.IPowerManager");
+  Object candidate=Class.forName("android.os.IPowerManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
+  interactiveMethod=api.getMethod("isInteractive");sleepReasonMethod=api.getMethod("getLastSleepReason");
+  wakeMethod=api.getMethod("wakeUp",long.class,int.class,String.class,String.class);
+  interactiveMethod.invoke(candidate);sleepReasonMethod.invoke(candidate);
+  wakePower=candidate;
+ }
+ private String foldWake(String armed)throws Exception{
+  String[] parts=armed.split(":");
+  long started=Long.parseLong(parts[0]),deadline=parts.length==2?Long.parseLong(parts[1]):started+5000;
+  if(!FoldWakePolicy.validLease(started,SystemClock.uptimeMillis(),deadline))throw new IllegalStateException("Fold wake lease expired");
+  preparePower();
+  if((boolean)interactiveMethod.invoke(wakePower))return "Already awake; no wake requested";
+  int reason=(int)sleepReasonMethod.invoke(wakePower);
   if(reason!=13)return "No override: last sleep reason="+reason+" (not device fold)";
-  if(!FoldWakePolicy.recover(started,SystemClock.uptimeMillis(),(int)api.getMethod("getLastSleepReason").invoke(power)))throw new IllegalStateException("Fold wake lease expired");
-  api.getMethod("wakeUp",long.class,int.class,String.class,String.class).invoke(power,SystemClock.uptimeMillis(),2,"Duo fold-only recovery","com.android.shell");
-  return "Fold sleep reason 13 verified; wake requested; keyguard unchanged";
+  long observed=SystemClock.elapsedRealtime();
+  if(!FoldWakePolicy.validLease(started,SystemClock.uptimeMillis(),deadline) || (int)sleepReasonMethod.invoke(wakePower)!=13)throw new IllegalStateException("Fold wake lease expired or sleep reason changed");
+  if((boolean)interactiveMethod.invoke(wakePower))return "Already awake on recheck; no wake requested";
+  long requested=SystemClock.elapsedRealtime();
+  wakeMethod.invoke(wakePower,SystemClock.uptimeMillis(),2,"Duo fold-only recovery","com.android.shell");
+  return "Fold sleep reason 13 verified at elapsed="+observed+"; wake requested elapsed="+requested+"; returned elapsed="+SystemClock.elapsedRealtime()+"; keyguard unchanged";
  }
  private static String migrateRotation(int user,String installation)throws Exception{
   if(installation==null||!installation.matches("[0-9]{1,19}"))throw new IllegalArgumentException("Invalid installation identity");

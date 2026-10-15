@@ -17,16 +17,81 @@ final class ConcurrentController {
  // state is CLOSED goes 5->2->0 (sleep). Inner (4) sessions end at open/endpoint and stay ungated.
  private volatile boolean screenOn=true;private final ReleaseDeferral deferral=new ReleaseDeferral();
  void screen(boolean on){screenOn=on;}
+ /** The configured handoff angle; at or above it the release gate treats the hinge as reopening. */
+ private volatile float handoffAngle=HandoffSettings.DEFAULT;
+ void handoff(float value){handoffAngle=HandoffSettings.angle(value);}
  private boolean deferOuter(float angle,boolean fresh){
   boolean hasSession=owned!=null;
   // Only a FRESH sample proves reopening: a stale 100 deg reading says nothing about a hinge still closing.
-  boolean reopening=fresh&&Float.isFinite(angle)&&angle>=HandoffPolicy.RELEASE_ANGLE;
+  boolean reopening=fresh&&Float.isFinite(angle)&&angle>=handoffAngle;
   if(!deferral.keep(SystemClock.elapsedRealtime(),hasSession,screenOn,reopening,BaseDeviceState::closed))return false;
   status="Waiting for the hinge to report closed before releasing the display session";
   return true;
  }
  synchronized boolean canMirrorSecondary(){return false;}
  synchronized boolean secondaryHasNativeContent(){return owned!=null && !primaryInner && contentInner;}
+ private FixedTaskRoute fixedRoute;private boolean taskRequested,taskVerified,routeUnlocked;private long routePollAt,restoreAt,panelsReadySince;private String fixedSecondary="";
+ private boolean closingAppReturnEnabled,closingAppReturnAttempted;
+ synchronized void closingAppReturnEnabled(boolean enabled){closingAppReturnEnabled=enabled;}
+ private HandoffPowerOverride powerOverride;private boolean powerOverrideEnabled,powerOverrideArmed,powerCancellationSent;
+ synchronized void powerOverrideEnabled(boolean enabled){if(powerOverrideEnabled&&!enabled&&powerOverride!=null)powerOverride.cancel("option disabled");powerOverrideEnabled=enabled;}
+ private final EndpointPowerTrace endpointPower=new EndpointPowerTrace();
+ private final HandoffTracePolicy tracePolicy=new HandoffTracePolicy();
+ synchronized void observeMotion(float angle,boolean fresh,boolean allowed,float open,boolean dual,boolean windowFirst){
+  String event=tracePolicy.update(angle,fresh,allowed,FoldThreshold.sanitize(open),SystemClock.elapsedRealtime());
+  if(event.isEmpty())return;
+  String route="; route="+(dual?(windowFirst?"dual window-first":"dual original"):"normal (dual OFF)");
+  if(event.startsWith("MOTION"))endpointPower.motion(event+route);
+  else endpointPower.arm(event+route);
+ }
+
+ synchronized Bundle incomingHoldInfo(){
+  Bundle b=new Bundle();b.putLong("session",started);b.putBoolean("active",owned!=null&&cameraSession);
+  b.putBoolean("closing",primaryInner);b.putInt("task",cameraSession&&fixedRoute!=null?fixedRoute.selectedTask():-1);
+  b.putString("physical",fixedSecondary);b.putInt("width",destinationWidth);b.putInt("height",destinationHeight);return b;
+ }
+ private long readinessLostAt;
+ private int destinationWidth,destinationHeight;private String endpointObservation="";
+ private boolean endpointReturnWaiting;private long endpointReturnDeadline;private String endpointTarget="";
+ private boolean routeCheckpoint;private String routeObservation="";
+ private boolean cameraSession;private String fixedPrimary="";
+ private final ScreenshotWindowTrace windows=new ScreenshotWindowTrace();
+ private long afterReleaseAt;private int afterReleaseStage;
+ private final ArrayDeque<String> samples=new ArrayDeque<>();
+ private long sampledAt;private String panelSample="";private boolean capturedTasks;
+ private void log(String text){samples.addLast(SystemClock.elapsedRealtime()+": "+text);while(samples.size()>90)samples.removeFirst();}
+ synchronized String trace(){return "Screenshot panel trace (software states, not optical proof):\n"+String.join("\n",samples)+"\n"+windows.report()+"\n"+endpointPower.report()+(powerOverride==null?"\nSamsung ON override experiment: not armed":("\n"+powerOverride.report()));}
+ private void samplePanels(float angle,boolean windowReady,boolean ready,boolean force){
+  long now=SystemClock.elapsedRealtime();if(!force&&now-sampledAt<100)return;sampledAt=now;
+  try{
+   Object dm=Class.forName("android.hardware.display.DisplayManagerGlobal").getMethod("getInstance").invoke(null);
+   StringBuilder line=new StringBuilder();boolean secondOn=false;
+   for(int id=0;id<=1;id++){
+    Object d=dm.getClass().getMethod("getDisplayInfo",int.class).invoke(dm,id);
+    if(d==null){line.append(" display").append(id).append("=missing");continue;}
+    Class<?> c=d.getClass();int state=c.getField("state").getInt(d);if(id==1)secondOn=state==2;
+    line.append(" display").append(id).append(" physical=").append(c.getField("uniqueId").get(d)).append(" state=").append(state)
+     .append(" size=").append(c.getField("logicalWidth").get(d)).append("x").append(c.getField("logicalHeight").get(d));
+   }
+   String next=line.toString();
+   if(force||!next.equals(panelSample)){panelSample=next;log("angle="+angle+" prepared="+windowReady+" secondaryReady="+ready+next);}
+   if(secondOn&&owned!=null&&!capturedTasks){capturedTasks=true;logNativeTasks();windows.capture("secondary ON");}
+  }catch(Exception e){if(force)log("Display sample failed: "+e);}
+ }
+ private void logNativeTasks(){
+  try{
+   Object atm=Class.forName("android.app.ActivityTaskManager").getMethod("getService").invoke(null);
+   for(int display=0;display<=1;display++){
+    List<?> roots=(List<?>)Class.forName("android.app.IActivityTaskManager").getMethod("getAllRootTaskInfosOnDisplay",int.class).invoke(atm,display);
+    log("Tasks display="+display+" roots="+roots.size());
+    for(Object root:roots){
+     String config=String.valueOf(root.getClass().getField("configuration").get(root));
+     int bounds=config.indexOf("mBounds=");int end=bounds<0?-1:config.indexOf(')',bounds);
+     log("D"+display+" task="+root.getClass().getField("taskId").get(root)+" top="+root.getClass().getField("topActivity").get(root)+" "+(end>bounds?config.substring(bounds,end+1):"bounds unavailable"));
+    }
+   }
+  }catch(Exception e){log("Incoming task diagnostics unavailable: "+e);}
+ }
  String status="Dual-screen mode ready";
  synchronized boolean active(){return owned!=null;}
  private void init()throws Exception{
@@ -42,57 +107,188 @@ final class ConcurrentController {
   requestType=Class.forName("android.hardware.devicestate.DeviceStateRequest");callbackType=Class.forName("android.hardware.devicestate.DeviceStateRequest$Callback");
   request=type.getMethod("requestState",requestType,Executor.class,callbackType);cancel=type.getMethod("cancelStateRequest");manager=candidate;
  }
+ private String physicalPrimary()throws Exception{return physicalId(0);}
+ private String physicalId(int id)throws Exception{
+  Object dm=Class.forName("android.hardware.display.DisplayManagerGlobal").getMethod("getInstance").invoke(null);
+  Object info=dm.getClass().getMethod("getDisplayInfo",int.class).invoke(dm,id);
+  return String.valueOf(info.getClass().getField("uniqueId").get(info));
+ }
  private void begin(boolean inner,long now)throws Exception{
   init();
+  if(cameraSession){afterReleaseAt=0;if(fixedRoute==null)fixedRoute=new FixedTaskRoute();log(fixedRoute.prepare());logNativeTasks();windows.capture("before request");}
   Object info=BaseDeviceState.info();
   Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
   if(!current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Existing display override; stop other test apps first");
+  if(cameraSession){readinessLostAt=0;closingAppReturnAttempted=false;taskRequested=false;taskVerified=false;routeCheckpoint=false;routeObservation="";panelsReadySince=0;routePollAt=0;fixedPrimary=physicalPrimary();fixedSecondary=physicalId(1);captureDestinationSize();capturedTasks=false;log("REQUEST after committed outgoing screenshot; retain physical primary="+fixedPrimary+"; source="+(inner?"inner":"cover"));samplePanels(Float.NaN,true,false,true);}
+  if(cameraSession&&powerOverrideEnabled){if(powerOverride==null)powerOverride=new HandoffPowerOverride();powerOverrideArmed=false;powerCancellationSent=false;powerOverride.newSession();}
   setConcurrent(inner,now); // Captured outgoing panel becomes the secondary Presentation.
  }
  private void setConcurrent(boolean inner,long now)throws Exception{
   nativeFailure="";nativeRetried=false;primaryInner=contentInner=inner;started=now;readyLostAt=now;endpointSince=0;mappingDeadline=now+1800;
   Object builder=requestType.getMethod("newBuilder",int.class).invoke(null,inner?innerId:outerId);
+  if(cameraSession&&inner)builder.getClass().getMethod("setFlags",int.class).invoke(builder,4);
   Object next=builder.getClass().getMethod("build").invoke(builder);owned=next;
   Object callback=Proxy.newProxyInstance(callbackType.getClassLoader(),new Class<?>[]{callbackType},(proxy,m,args)->{
    switch(m.getName()){
     case "hashCode":return System.identityHashCode(proxy);
     case "equals":return proxy==args[0];
     case "toString":return "DuoConcurrentRequest";
-    case "onRequestCanceled":synchronized(this){if(owned==next){owned=null;blocked=true;status="Concurrent request canceled by Android";}}
+    case "onRequestCanceled":synchronized(this){if(owned==next){owned=null;blocked=true;status="Concurrent request canceled by Android";if(cameraSession){log(status);endpointPower.arm("Android canceled concurrent request");samplePanels(Float.NaN,false,false,true);afterReleaseAt=SystemClock.elapsedRealtime();afterReleaseStage=0;windows.capture("Android canceled");}}}
    }return null;
   });
   request.invoke(manager,next,(Executor)Runnable::run,callback);
   status="Waiting for second-panel Presentation (state "+(inner?innerId:outerId)+")";
  }
- synchronized void update(float angle,boolean fresh,boolean unlocked,boolean primaryIsInner,boolean secondaryReady,int frozenSource,float openThreshold){
+ private boolean panelsReady()throws Exception{
+  Object dm=Class.forName("android.hardware.display.DisplayManagerGlobal").getMethod("getInstance").invoke(null);
+  for(int id=0;id<2;id++){
+   Object d=dm.getClass().getMethod("getDisplayInfo",int.class).invoke(dm,id);if(d==null)return false;
+   Class<?> c=d.getClass();if(c.getField("state").getInt(d)!=2)return false;
+   String physical=String.valueOf(c.getField("uniqueId").get(d));
+   if(!physical.equals(id==0?fixedPrimary:fixedSecondary))return false;
+   int w=c.getField("logicalWidth").getInt(d),h=c.getField("logicalHeight").getInt(d);
+   if(w<=0||h<=0||(Math.min(w,h)/(float)Math.max(w,h)>.7f)!=(id==0?primaryInner:!primaryInner))return false;
+   if(id==1){destinationWidth=w;destinationHeight=h;}
+  }return true;
+ }
+ private void captureDestinationSize()throws Exception{
+  Object dm=Class.forName("android.hardware.display.DisplayManagerGlobal").getMethod("getInstance").invoke(null);
+  Object d=dm.getClass().getMethod("getDisplayInfo",int.class).invoke(dm,1);
+  if(d==null)throw new IllegalStateException("Destination display missing");
+  destinationWidth=d.getClass().getField("logicalWidth").getInt(d);destinationHeight=d.getClass().getField("logicalHeight").getInt(d);
+  if(destinationWidth<=0||destinationHeight<=0)throw new IllegalStateException("Destination dimensions unavailable");
+ }
+ private boolean primaryReady(String physical)throws Exception{
+  Object dm=Class.forName("android.hardware.display.DisplayManagerGlobal").getMethod("getInstance").invoke(null);
+  Object d=dm.getClass().getMethod("getDisplayInfo",int.class).invoke(dm,0);if(d==null)return false;
+  Class<?> c=d.getClass();String actual=String.valueOf(c.getField("uniqueId").get(d));
+  int state=c.getField("state").getInt(d),w=c.getField("logicalWidth").getInt(d),h=c.getField("logicalHeight").getInt(d);
+  boolean ready=EndpointReturnPolicy.ready(physical,actual,state,destinationWidth,destinationHeight,w,h);
+  String observation="ENDPOINT readiness: physical="+actual+" state="+state+" size="+w+"x"+h+" expected="+destinationWidth+"x"+destinationHeight+" ready="+ready;
+  if(!observation.equals(endpointObservation)){endpointObservation=observation;log(observation);}
+  return ready;
+ }
+ private void returnTask(){
+  if(fixedRoute==null||!fixedRoute.pending())return;
+  try{log(fixedRoute.restore(routeUnlocked));}catch(Exception e){log("Task return pending: "+e);}
+ }
+ synchronized void update(float angle,boolean fresh,boolean unlocked,boolean primaryIsInner,boolean secondaryReady,int frozenSource,float openThreshold,boolean cameraStartup,boolean windowPrepared){
   long token=Binder.clearCallingIdentity();long now=SystemClock.elapsedRealtime();
   try{
-   if(!unlocked){if(deferOuter(angle,fresh))return;releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;return;}
+   routeUnlocked=unlocked;
+   if(powerOverride!=null){
+    if((!fresh||!cameraStartup)&&!powerCancellationSent){powerCancellationSent=true;powerOverride.cancel("stale angle or mode changed");}
+    else if(!unlocked&&!powerCancellationSent){powerCancellationSent=true;powerOverride.cancelUnlessFoldSleep();}
+    else if(unlocked&&fresh&&cameraStartup&&!powerCancellationSent&&powerOverrideEnabled&&!powerOverrideArmed&&cameraSession&&owned!=null&&((primaryInner&&angle<=30f)||(!primaryInner&&angle>=150f))){powerOverrideArmed=true;endpointPower.arm("Samsung ON override boundary");powerOverride.arm();}
+   }
+   if(ClosingAppReturnPolicy.shouldReturn(closingAppReturnEnabled,cameraSession&&cameraStartup,primaryInner,owned!=null,fresh,unlocked,closingAppReturnAttempted,angle)&&fixedRoute!=null&&fixedRoute.pending()){
+    closingAppReturnAttempted=true;
+    log("APP-FIRST CLOSING: early task return requested at angle="+angle+"; concurrency retained; sleep prevention unverified");
+    returnTask();
+    try{log("APP-FIRST CLOSING: "+fixedRoute.primaryFocusSummary());}catch(Exception e){log("APP-FIRST focus unavailable: "+e);}
+   }
+   if(closingAppReturnAttempted&&owned!=null&&(!closingAppReturnEnabled||(fresh&&angle>25))){log("APP-FIRST CLOSING: disabled or reopened; release test session");releaseInternal();blocked=true;return;}
+   if(endpointReturnWaiting){
+    if(owned!=null){releaseInternal();return;}
+    boolean mapped=false;
+    try{mapped=primaryReady(endpointTarget);}catch(Exception e){log("Endpoint mapping observation unavailable: "+e.getClass().getSimpleName());}
+    if(EndpointReturnPolicy.shouldWait(now,endpointReturnDeadline,unlocked&&cameraStartup,mapped)){
+     status="Endpoint: waiting for incoming panel ON with destination dimensions before task return";return;
+    }
+    endpointReturnWaiting=false;
+    log(mapped?"ENDPOINT: incoming physical panel is D0, ON and destination-sized; return exact app":"ENDPOINT: mapping wait ended; recover exact app");
+    returnTask();
+    status=mapped?"Endpoint complete — normal display control restored":"Endpoint mapping wait ended — recovery attempted";
+   }
+   if(owned==null&&fixedRoute!=null&&fixedRoute.pending()){
+    if(now-restoreAt>=1000){restoreAt=now;returnTask();}
+    if(fixedRoute.pending()){status="Waiting to return exact routed app";return;}
+   }
+   if(afterReleaseAt>0){
+    long elapsed=now-afterReleaseAt;
+    if(elapsed>=(afterReleaseStage==0?200:1200)){
+     log("AFTER RELEASE +"+elapsed+" ms");samplePanels(angle,windowPrepared,secondaryReady,true);logNativeTasks();windows.capture("after release +"+elapsed+"ms");
+     if(++afterReleaseStage>=2)afterReleaseAt=0;
+    }
+   }
+   if(owned!=null && cameraSession!=cameraStartup){if(cameraSession)log("RELEASE: screenshot mode changed");releaseInternal();blocked=true;return;}
+   if(!unlocked){if(deferOuter(angle,fresh))return;if(cameraSession&&owned!=null)log("RELEASE: locked, screen off, or host disabled");releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;return;}
    if(!fresh){
     if(bootstrapping && owned!=null && now-started<3500)return;
     if(deferOuter(angle,false))return;
-    releaseInternal();bootstrapping=false;
+    if(cameraSession&&owned!=null)log("RELEASE: stale hinge angle");releaseInternal();bootstrapping=false;
     status="Waiting for fresh angle and outgoing capture";
     return;
    }
    bootstrapping=false;
    if(FoldThreshold.endpoint(angle,openThreshold)){
     if(endpointSince==0)endpointSince=now;
-    if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(deferOuter(angle,true))return;releaseInternal();blocked=false;}return;
+    if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(deferOuter(angle,true))return;if(cameraSession&&owned!=null){
+      log("RELEASE: endpoint angle="+angle);endpointPower.arm("Endpoint release angle="+angle);samplePanels(angle,windowPrepared,secondaryReady,true);
+      if(!primaryInner&&angle>=FoldThreshold.sanitize(openThreshold)&&fixedRoute!=null&&fixedRoute.pending()){
+       endpointReturnWaiting=true;endpointTarget=fixedSecondary;endpointObservation="";endpointReturnDeadline=now+1800;
+       log("ENDPOINT: retain app on D1 while canceling concurrency; target primary="+endpointTarget);
+      }
+     }releaseInternal();blocked=false;}return;
    }
    endpointSince=0;deferral.reset();
-   if(owned==null){if(!blocked&&FoldThreshold.canStart(angle,openThreshold)){if(FreezePolicy.canSwitch(primaryIsInner,frozenSource))begin(FreezePolicy.targetInner(frozenSource),now);else status="Waiting for outgoing frame before switching displays";}return;}
+   if(owned==null){
+    if(!blocked&&(cameraStartup?ScreenshotStartupPolicy.mayStart(primaryIsInner,angle,openThreshold):FoldThreshold.canStart(angle,openThreshold))){
+     if(cameraStartup){
+      if(ScreenshotStartupPolicy.canBegin(primaryIsInner,frozenSource,windowPrepared)){
+       cameraSession=true;begin(ScreenshotStartupPolicy.keepInnerPrimary(frozenSource),now);
+       status="Window-first screenshot: keeping outgoing primary; waiting for secondary ON";
+      }else status="Screenshot startup waiting for outgoing frame COMMIT and attached destination window";
+     }else{cameraSession=false;if(FreezePolicy.canSwitch(primaryIsInner,frozenSource))begin(FreezePolicy.targetInner(frozenSource),now);else status="Waiting for outgoing frame before switching displays";}
+    }return;
+   }
+   if(cameraSession){
+    if(now-started>=30000){log("RELEASE: 30-second limit");releaseInternal();blocked=true;status="Fixed-panel test reached time limit";return;}
+    samplePanels(angle,windowPrepared,secondaryReady,false);
+    if(!fixedPrimary.equals(physicalPrimary()))throw new IllegalStateException("Fixed primary changed during task route");
+    boolean ready=windowPrepared&&secondaryReady&&panelsReady();
+    if(!ready){panelsReadySince=0;taskVerified=false;if(readinessLostAt==0)readinessLostAt=now;if(now-readinessLostAt>2500)throw new IllegalStateException("Fixed panels or screenshot lost readiness for 2500 ms");status="Waiting for fixed panels and committed outgoing screenshot";return;}
+    readinessLostAt=0;
+    if(panelsReadySince==0)panelsReadySince=now;
+    if(now-panelsReadySince<120){status="Checking stable fixed-panel readiness";return;}
+    if(!fixedRoute.selected()){status="Home/system screen not routed — test inside a fullscreen app";}
+    else if(!taskRequested){taskRequested=true;log(fixedRoute.move());windows.capture("app route requested");status="App route requested; waiting for D1 placement and focus";}
+    else if(now-routePollAt>=250){
+     routePollAt=now;
+     // Task/focus queries are diagnostics, not evidence that the visible app failed.
+     // Never tear down or re-route a working fixed-panel session on this check.
+     try{
+      FixedTaskRoute.Observation observation=fixedRoute.observe();
+      String next=observation.summary();
+      if(!next.equals(routeObservation)){routeObservation=next;log("TASK OBSERVATION: "+next);}
+      if(observation.verified()&&!taskVerified){log("TASK PLACED + FOCUSED on D1; optical continuity not verified");windows.capture("app placed and focused");}
+      taskVerified=observation.verified();
+      status="Fixed panels held; "+next;
+     }catch(Exception diagnosticError){
+      taskVerified=false;
+      String next="Task observation unavailable: "+diagnosticError;
+      if(!next.equals(routeObservation)){routeObservation=next;log(next);}
+      status="Fixed panels held; task observation unavailable";
+     }
+     if(!routeCheckpoint&&now-started>=3000){
+      routeCheckpoint=true;log("HOLD: three-second checkpoint; "+routeObservation+"; no task verification timeout");
+      logNativeTasks();windows.capture("three-second hold checkpoint");
+     }
+    }
+    return;
+   }
    if(primaryIsInner!=primaryInner && now<mappingDeadline)return;
    if(primaryIsInner!=primaryInner)throw new IllegalStateException("Primary physical display changed during session");
    // Hold one inner-primary session for the entire overlap; do not move tasks or swap at 90 degrees.
    status=secondaryReady?(primaryInner?"Inner live + frozen cover":"Cover live + frozen inner"):"Waiting for outgoing-panel freeze Presentation";
-  }catch(Exception e){Throwable root=e;while(root.getCause()!=null)root=root.getCause();releaseInternal();blocked=true;status="Concurrent mode error: "+root.getMessage();}
+  }catch(Exception e){Throwable root=e;while(root.getCause()!=null)root=root.getCause();if(cameraSession)log("RELEASE: "+root);releaseInternal();blocked=true;status="Concurrent mode error: "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(token);}
  }
  private void releaseInternal(){
-  if(owned!=null){try{cancel.invoke(manager);owned=null;status="Normal display control restored";}catch(Exception e){status="Display release pending";}}
+  if(!endpointReturnWaiting)returnTask();
+  if(owned!=null){try{if(cameraSession){logNativeTasks();windows.capture("before release");afterReleaseAt=SystemClock.elapsedRealtime();afterReleaseStage=0;}cancel.invoke(manager);owned=null;status="Normal display control restored";}catch(Exception e){status="Display release pending";}}
  }
- synchronized void release(){long token=Binder.clearCallingIdentity();try{releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;}finally{Binder.restoreCallingIdentity(token);}}
+ synchronized void release(){if(powerOverride!=null)powerOverride.cancel("controller stopped");endpointReturnWaiting=false;long token=Binder.clearCallingIdentity();try{if(cameraSession&&owned!=null)log("RELEASE: controller disabled or stopped");releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;}finally{Binder.restoreCallingIdentity(token);}}
  /** External release (effect disallowed, dual mode turned off): the outer session waits for CLOSED. */
  synchronized void releaseGated(float angle,boolean fresh){if(deferOuter(angle,fresh))return;release();}
  /** Teardown: bounded wait for CLOSED before cancelling an outer session. */

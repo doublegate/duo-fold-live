@@ -1,8 +1,8 @@
 ![DuoFold Live](docs/assets/duofold-live-logo.svg)
 
-# Duo Fold Live · 3.5.2
+# Duo Fold Live · 3.5.4
 
-**Current official release: 3.5.2.** Occasional unlock wallpaper flashing remains a known issue. For Keep Awake, disable Samsung’s “Lock when folded”; see troubleshooting. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
+**Current official release: 3.5.4.** Occasional unlock wallpaper flashing remains a known issue. For Keep Awake, disable Samsung’s “Lock when folded”; see troubleshooting. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
 
 ## 📺 Step-by-step installation tutorial
 **New here? [Watch the full setup walkthrough on YouTube](https://www.youtube.com/watch?v=8Ucm7ceBDN4).**
@@ -11,13 +11,33 @@ Created by a Duo Fold Live user—not by me. Huge thanks for putting this togeth
 
 An iPhone Duo-inspired folding animation for the **Samsung Galaxy Z Fold 8**, with windowed glass, live cover previews, and smooth black fades around Samsung’s display handoff. Free and open source. Runs over One UI and ordinary apps without replacing your launcher.
 
-**[Download 3.5.2](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.2 release notes](docs/3.5.2-CHANGELOG.md) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
+**[Download 3.5.4](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.4 release notes](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.4) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
 
 **Only tested on the Z Fold 8 (SM-F971U).** Fold 8 Ultra, Fold 7, and other devices are unverified. Do not expect compatibility. Model recognition includes regional SM-F971, SM-F976, and SM-F966 families. Unknown models display a warning and may proceed. Android 17 and the existing Samsung wallpaper/API checks are still required. Recognition is not verified compatibility.
 
+## What's new in 3.5.4
+
+- **Cover stays on at full closure:** adopts the user-tested Android-managed release behavior with a bounded fallback. The full-close blackout disappeared in SM-F971U testing; the separate mid-fold display switch remains.
+- **Smooth / Fast motion presets:** Smooth selects 120 ms and is the new default; Fast selects 30 ms. Both update the slider, which remains available for custom values. Reset selects Smooth. The new default is applied once on upgrade.
+- **Landscape previews fixed:** clean and reflected cover content follows the physical hinge and fits the current orientation.
+- **Simpler controls:** remove the obsolete closing cover power-pulse experiment.
+
+## What's new in 3.5.3 — since stable 3.5.2
+
+- **Redesigned Duo Classic:** gentler cover stretch, folding toward the hinge with the reverse motion on unfolding, stronger blur, and both the clean and mirrored inner-display cover previews.
+- **New Plain Fade:** a moving black wipe over screen dimming, with an opaque inner-screen hold before handoff and no cover previews. Tune the cover and inner displays separately: wipe start/end positions, travel timing, softness, darkness, brightness, and dimming timing. Copy your settings to share a preset.
+- **Choose the look and behavior independently:** three animation styles, plus **Fold & Unfold**, **Fold-Only**, or **Unfold-Only** for any style. **Live Screen** remains the default Folding Mode.
+- **Quick Settings toggle:** add **Duo Fold Live** using Samsung’s Quick Settings panel editor, then tap to switch animations on or off. Long-press opens app settings.
+- **Notification controls:** jump directly to Android’s running-notification category to hide the persistent notice, and independently turn optional support notifications off.
+- **Wake and connection recovery:** capture warm-up after unlock addresses missing content on the first fold; helper reconnection and timeout handling are more robust.
+- **Closed-hinge jitter protection:** filters tiny closed-phone angle excursions to reduce unintended preview/display activation.
+- **Clearer diagnostics and testing boundaries:** a shorter primary status report, optional health history, richer handoff/connection traces, and copyable Plain Fade settings. Screenshot Mode is marked coming soon and gated behind a 10-second hold for testing.
+
+Custom wallpaper unlock flashing and Samsung’s mid-fold display-switch blackout remain unresolved; 3.5.4 addresses the separate full-close blackout. The experimental photo-wallpaper test is not a replacement for the working Samsung hinge-reader setup.
+
 ## Updating from an older version
 
-The signing key changed. **Older public installs require one uninstall/reinstall**, followed by setup again. Uninstalling removes local settings and the saved custom wallpaper. Recent alphas using the current key can update directly. Future releases using this permanent key will update in place; another signing-key migration is not planned.
+**3.5.2 and recent alphas signed with the current permanent key can update in place.** The signing key changed before those builds; older installs using the previous key require one uninstall/reinstall, followed by setup again. Uninstalling removes local settings and the saved custom wallpaper. Recent alphas using the current key can update directly. Future releases using this permanent key will update in place; another signing-key migration is not planned.
 
 ## Quick setup
 
@@ -32,14 +52,25 @@ The app guides setup. Samsung’s interactive wallpaper and Shizuku running in A
 
 **Your actual screen becomes part of the folding animation.** Duo follows the hinge as you move it, projecting your content through glass, reflections, blur, and a softened display handoff. The default path uses live content, so supported content can keep moving behind the effect.
 
-### Four animation styles
+### Three animation styles
 
 - **Windowed Glass:** the default, iPhone Duo-inspired experience with a live cover preview, reflected left side, progressive glass, and a black fade around the screen switch.
-- **Duo Classic:** glass over the inner screen’s own content with a black reveal, without the mirrored cover preview.
-- **Fold-Only:** Windowed Glass when closing; normal behavior when opening.
-- **Unfold-Only:** Windowed Glass when opening; normal behavior when closing.
+- **Duo Classic:** 1-for-1 recreation of the iPhone Duo animation, with a gentler stretch and stronger blur.
+- **Plain Fade**
+
+### Independent animation behavior and folding mode
+
+Select **Fold & Unfold** (default), **Fold-Only**, or **Unfold-Only** independently of your animation style. The separate **Folding Mode** section selects the content route: **Live Screen** is the normal default; **Screenshot Mode** is still in development.
+
+### Plain Fade controls
+
+A translating black wipe travels across the cover screen or from the inner edge toward the hinge, with screen dimming underneath. The inner display stays black before handoff; Plain Fade never shows the cover preview or its mirrored copy.
+
+Cover and inner controls are independent: start/end position, start/end motion timing, timing exponent, edge softness, wipe darkness, start/end brightness, and dimming exponent. Settings save when a slider is released. Brightness adjusts the animation’s dimming overlay, not your phone’s system brightness. Each panel has a reset button; **Copy Plain Fade settings** makes sharing your preferred values easy.
 
 ### A cover-screen preview inside the inner display
+
+Available in Windowed Glass and Duo Classic; disabled for Plain Fade.
 
 - **Clean right-side preview:** see the cover content without its animation layered into the mirror. The right preview is committed before the left reflection starts.
 - **Two left-side appearances:** **Frosted Reflection** is the default blurred, horizontally mirrored image. **Animated Reflection** mirrors the cover animation for a more literal glass-window effect. Select either in Advanced settings.
@@ -48,9 +79,9 @@ The app guides setup. Samsung’s interactive wallpaper and Shizuku running in A
 
 ### Tune the look and motion
 
-- **V2 Window Reveal · experimental** is the default projection, with Original available for comparison. Cover early stretch defaults to 90%, end stretch to 125% (80–150%), and vertical compression to 115%. Separate inner controls default to 30% early stretch, 45% end stretch (0–150%), and 60% vertical compression. Both vertical sliders range from 0–200%; 100% retains the original perspective. Startup easing is on and toggleable.
+- **V2 Window Reveal · experimental** is the default projection, with Original available for comparison. Cover early stretch defaults to 90%, end stretch to 125% (80–150%), and vertical compression to 90%. Separate inner controls default to 30% early stretch, 60% end stretch (0–150%), and 40% vertical compression. Both vertical sliders range from 0–200%; 100% retains the original perspective. Startup easing is on and toggleable. Duo Classic applies its own stretch, blur/glass, and stronger inner-compression tuning.
 
-- **Motion smoothness, blur amount, and glass strength** have separate controls and reset buttons. Defaults: 30 ms, 30%, and 100% respectively.
+- **Motion smoothness, blur amount, and glass strength** have separate controls and reset buttons. Defaults: Smooth (120 ms), 30%, and 100% respectively. Fast selects 30 ms; the slider also supports custom smoothness.
 - **Black fade smoothing and gradualness** let you shape the transition around Samsung’s display switch.
 - **Manual live-content targets:** 120 FPS experimental by default, or 60 FPS for lower GPU cost. No automatic switching based on the display’s reported refresh rate. These are targets, not guaranteed frame rates.
 - **Three anti-aliasing methods** in Advanced: **Lightweight Texture Filtering** (default), **Edge-Adaptive Smoothing**, and **4× Supersampling**. AA can be disabled or adjusted within a narrow strength range, independently of blur and glass strength. The two heavier methods remain experimental.
@@ -62,12 +93,15 @@ The app guides setup. Samsung’s interactive wallpaper and Shizuku running in A
 - **Custom photo wallpaper:** choose a photo, preview its folded and unfolded crops, and keep it saved across compatible app updates.
 - **Works over One UI and ordinary apps** without replacing your launcher.
 - **Temporary orientation locking during transitions**, followed by release, plus an Advanced **Repair auto-rotate** button for recovery.
+- **Quick Settings tile:** toggle animation from Samsung’s pull-down panel; wallpaper and animation preferences are retained.
+- **Notification preferences:** manage the running-notification category and optional support notifications independently.
 - **Guided setup and connection recovery:** wallpaper checks, Shizuku authorization, accessibility guidance, and reconnect controls are built in.
 - **Keep Awake support** is enabled and checked in the background. Disable Samsung’s **Lock when folded** setting to keep the cover awake when closing from Home; see troubleshooting.
 
 ### Experiments and useful diagnostics
 
-- **Optional dual-screen screenshot handoff** under Advanced → Developer settings, for experimenting with a held image instead of the default live handoff. Off by default.
+- **Screenshot Mode — coming soon:** normal selection displays a development notice. Holding its option for 10 seconds unlocks it for local testing. It is not the recommended everyday route.
+- **Photo wallpaper hinge test:** an opt-in Developer-settings experiment with restoration controls. Applying the test wallpaper stopped fresh hinge readings in device testing; it does not fix custom wallpaper unlock flashes. Its wallpaper service can also appear in Samsung’s wallpaper picker.
 - **Copyable status reports** include angle-feed latency, measured capture throughput, renderer submission rates, preview/handoff events, AA settings, and 24-hour app-process health samples. Separate wallpaper reports help investigate unlock flashes.
 - **Free and open source:** all features are available without donating. Optional support reminders can be snoozed or permanently dismissed.
 
@@ -81,7 +115,7 @@ Installs that previously skipped onboarding without verifying wallpaper setup re
 
 ## Known bugs
 
-1. **Black screen when switching between folded and unfolded displays.** This is a Samsung-side hardware limitation, not an issue with the app. We’re working on workarounds; for now, Duo uses a black fade transition to smooth the handoff in both directions.
+1. **Black screen when switching between folded and unfolded displays.** Samsung’s display switching can include a black interval; eliminating it is not established. We’re working on workarounds; for now, Duo uses a black fade transition to smooth the handoff in both directions.
 2. Unlocking directly onto Home may briefly reveal the underlying live wallpaper before the custom photo. The latest release improves this, but occasional flashes remain.
 3. Occasionally part of the unfolding fade does not trigger correctly, so the transition may look choppy.
 
@@ -129,7 +163,10 @@ Tips do not unlock features or promise fixes. Bug reports, testing, and pull req
 
 Install JDK 17, Android SDK platform 36, and Android build tools. Set `ANDROID_HOME` or a local `sdk.dir` in `local.properties`.
 
+The stable 3.5.4 source is tagged **v3.5.4**. Check out that tag to reproduce this release.
+
 ```sh
+git checkout v3.5.4
 ./gradlew testReleaseUnitTest assembleRelease
 ```
 
@@ -158,3 +195,7 @@ Duo Fold Live is the name of this app. The following are separate upstream proje
 - **[Shizuku](https://github.com/RikkaApps/Shizuku)** and its API contributors: the ADB-assisted access used by the live angle reader and helpers.
 
 Thank you to the original authors and contributors. These credits do not imply their endorsement of this app. MIT for project code, subject to preserved third-party licenses; see [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and the notices bundled under `app/src/main/assets/licenses/`.
+
+## Hobby project disclaimer
+
+Duo Fold Live is a free, open-source hobby project, provided “as is” without warranties. Use it at your own risk. To the extent permitted by applicable law, the authors and contributors are not liable for device damage, data loss, malfunctions, or other harm arising from its use. Not affiliated with or endorsed by Samsung. See [LICENSE](LICENSE) for the full license terms.

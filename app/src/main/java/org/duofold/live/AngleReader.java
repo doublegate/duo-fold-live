@@ -9,12 +9,15 @@ public class AngleReader extends Binder {
  private volatile HandoffFade fade;
  private FoldRotationHold rotation,retiringRotation;private long retiringSince;
  private String recoveryApk;
+ private final ClosedHingeGate closedHingeGate=new ClosedHingeGate();
  private final AnimationModePolicy animationMode=new AnimationModePolicy();
  private volatile boolean previewAllowed=false;
  private final InnerLiveMirror mirror=new InnerLiveMirror();
  private final ConcurrentController concurrent=new ConcurrentController();
  private final ContinuityProbeDiagnostics continuity=new ContinuityProbeDiagnostics();
  private final CoverHandoff handoff=new CoverHandoff();
+ private long screenshotTraceSentAt;
+ private final ClosureDeviceState closureState=new ClosureDeviceState();
  private long heartbeat=SystemClock.elapsedRealtime();private long diagAt;
  private int logLines,matchingResponses,staleResponses;
  private int owner=-1,generation=0,count=0; private float angle=Float.NaN,min=180,max=0; private long last=0; private String state="Idle",raw=""; private java.lang.Process process; private final Set<Float> unique=new HashSet<>();
@@ -57,34 +60,47 @@ public class AngleReader extends Binder {
   if(code==8){if(expansion==null)expansion=new PreviewExpansion(caller);reply.writeNoException();reply.writeStrongBinder(expansion);return true;}
   if(code==6){if(capture==null)capture=new GlassCapture(caller);reply.writeNoException();reply.writeStrongBinder(capture);return true;}
   if(code==1){String action=data.readString();if(action==null||!action.matches("org\\.duofold\\.live\\.wallpaperprobe\\.READ_[0-9]+"))throw new IllegalArgumentException("Invalid action");recoveryApk=data.readString();start(action);reply.writeNoException();return true;}
-  if(code==2){heartbeat=SystemClock.elapsedRealtime();boolean unlocked=data.readInt()!=0,dual=data.readInt()!=0,primaryInner=data.readInt()!=0,secondaryReady=data.readInt()!=0;int frozenSource=data.readInt();float openThreshold=data.readFloat();boolean live=data.readInt()!=0;boolean appEnabled=data.readInt()!=0;float closedThreshold=FoldThreshold.sanitizeClosed(data.readFloat());float effectiveAngle=FoldThreshold.effectiveAngle(angle,closedThreshold);long probeRequest=data.dataAvail()>=8?data.readLong():0;
+  if(code==2){heartbeat=SystemClock.elapsedRealtime();boolean unlocked=data.readInt()!=0,dual=data.readInt()!=0,primaryInner=data.readInt()!=0,secondaryReady=data.readInt()!=0;int frozenSource=data.readInt();float openThreshold=data.readFloat();boolean live=data.readInt()!=0;boolean appEnabled=data.readInt()!=0;float closedThreshold=FoldThreshold.sanitizeClosed(data.readFloat());long probeRequest=data.dataAvail()>=8?data.readLong():0;
    float fadeSmoothing=data.dataAvail()>=4?data.readFloat():FadeSettings.DEFAULT_SMOOTHING;
    float fadeGradualness=data.dataAvail()>=4?data.readFloat():FadeSettings.DEFAULT_GRADUALNESS;
    String mode=data.dataAvail()>0?AnimationModePolicy.sanitize(data.readString()):AnimationModePolicy.DEFAULT;
    boolean debug=data.dataAvail()>=4&&data.readInt()!=0;
-   // Display power only, for CloseReleaseGate. Older clients do not send it: fall back to the unlocked flag.
+   float handoffAngle=HandoffSettings.angle(data.dataAvail()>=4?data.readFloat():HandoffSettings.DEFAULT);
+   boolean screenshotStartup=data.dataAvail()>=4&&data.readInt()!=0;boolean screenshotPrepared=data.dataAvail()>=4&&data.readInt()!=0;
+   concurrent.powerOverrideEnabled(data.dataAvail()>=4&&data.readInt()!=0);
+   if(data.dataAvail()>=4)data.readInt(); // Reserved former closing-power slot.
+   concurrent.closingAppReturnEnabled(data.dataAvail()>=4&&data.readInt()!=0);
+   boolean jitterProtection=data.dataAvail()<4||data.readInt()!=0;
+   String behavior=AnimationModePolicy.initialBehavior(data.dataAvail()>0?data.readString():null,mode);
+   float effectiveAngle=closedHingeGate.filter(angle,closedThreshold,jitterProtection,last>0&&heartbeat-last<750);
+   closureState.sample(angle,effectiveAngle,last>0&&heartbeat-last<750,dual,unlocked);
+   // Display power only, for CloseReleaseGate; a trailing field. Older clients do not send it: fall back to the unlocked flag.
    boolean screenOn=data.dataAvail()>=4?data.readInt()!=0:unlocked;
-   handoff.screen(screenOn);concurrent.screen(screenOn);
-   boolean effectAllowed=animationMode.update(mode,effectiveAngle,last>0&&heartbeat-last<750);
+   handoff.screen(screenOn);concurrent.screen(screenOn);concurrent.handoff(handoffAngle);
+   boolean effectAllowed=animationMode.update(behavior,effectiveAngle,last>0&&heartbeat-last<750);
    boolean mirrorMode=AnimationModePolicy.mirrors(mode);
    appEnabled=appEnabled&&effectAllowed;
    // A new hold only once the previous one has restored rotation and dropped its file lock; creating it earlier
    // failed with "Another orientation hold is active" and left ~2 s without a hold after a reader restart.
    // Bounded like awaitRelease(): after 8 s a stuck old hold no longer blocks a new one.
    if(rotation==null&&(retiringRotation==null||retiringRotation.released()||heartbeat-retiringSince>8000)){retiringRotation=null;rotation=new FoldRotationHold(caller/100000,recoveryApk);}
-   if(rotation!=null)rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);
+   if(rotation!=null){rotation.screenshotRelease(dual&&screenshotStartup);rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);}
    if(fade==null)fade=new HandoffFade();
-   fade.settings(fadeSmoothing,fadeGradualness,mirrorMode&&!debug,openThreshold);
+   fade.settings(fadeSmoothing,fadeGradualness,mirrorMode&&!debug,openThreshold,handoffAngle);
    fade.update(live&&!dual&&appEnabled&&!handoff.probeHolding(),effectiveAngle,last>0&&heartbeat-last<750);
    if(expansion!=null){expansion.motion(effectiveAngle,openThreshold);expansion.enabled(mirrorMode&&live&&!dual&&appEnabled&&!handoff.probeHolding());}
-   if(mirrorMode && live && !dual && unlocked && appEnabled && handoff.active() && !handoff.probeHolding() && angle>=HandoffPolicy.RELEASE_ANGLE && last>0 && heartbeat-last<750 && expansion!=null)expansion.holdBeforeRelease();
+   boolean bridgeReady=true;
+   boolean needsBridge=mirrorMode && live && !dual && unlocked && appEnabled && handoff.active() && !handoff.probeHolding() && angle>=handoffAngle && angle<FoldThreshold.sanitize(openThreshold) && last>0 && heartbeat-last<750 && expansion!=null;
+   if(needsBridge)bridgeReady=expansion.holdBeforeRelease();else if(expansion!=null)expansion.cancelReleaseWait();
+   concurrent.observeMotion(effectiveAngle,last>0&&heartbeat-last<2000,appEnabled&&unlocked,openThreshold,dual,screenshotStartup);
    boolean wasCoverHeld=handoff.active();
    // Every release of a held display override goes through CloseReleaseGate (mode changes and dual toggles too).
    boolean freshAngle=last>0&&heartbeat-last<750;
    // Mode switches: the incoming controller starts only once the outgoing one has actually released. A gated release
    // can still be deferring, and starting the other override meanwhile is rejected as an existing override.
-   if(!effectAllowed){handoff.releaseGated(effectiveAngle,freshAngle);concurrent.releaseGated(effectiveAngle,freshAngle);}else if(dual){handoff.releaseGated(effectiveAngle,freshAngle);if(!handoff.active())concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold);}else{concurrent.releaseGated(effectiveAngle,freshAngle);if(!concurrent.active())handoff.update(effectiveAngle,freshAngle,unlocked,live&&appEnabled,openThreshold,probeRequest);}
-   if(wasCoverHeld && !handoff.active() && expansion!=null)expansion.releaseReturned();
+   if(!effectAllowed){handoff.releaseGated(effectiveAngle,freshAngle);concurrent.releaseGated(effectiveAngle,freshAngle);}else if(dual){handoff.releaseGated(effectiveAngle,freshAngle);if(!handoff.active())concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold,screenshotStartup,screenshotPrepared);}else{concurrent.releaseGated(effectiveAngle,freshAngle);if(!concurrent.active()&&bridgeReady)handoff.update(effectiveAngle,freshAngle,unlocked,live&&appEnabled,openThreshold,probeRequest,handoffAngle);}
+   boolean timedCoverRelease=handoff.takeTimedCoverRelease();
+   if(((wasCoverHeld && !handoff.active()) || timedCoverRelease) && expansion!=null)expansion.releaseReturned();
    if(handoff.probeHolding()&&fade!=null)fade.update(false,effectiveAngle,false);
    if(expansion!=null&&handoff.probeHolding())expansion.enabled(false);
    previewAllowed=mirrorMode&&effectAllowed&&!handoff.probeNative()&&CoverPreviewPolicy.allowed(live,dual,primaryInner,unlocked,handoff.active());
@@ -93,12 +109,12 @@ public class AngleReader extends Binder {
    // Functional fields on every poll; the status strings (status UI and recovery log only) at most every
    // DiagnosticsCadence.INTERVAL_MS. "diag" tells the client which kind of reply this is.
    long replyNow=SystemClock.elapsedRealtime();boolean diag=DiagnosticsCadence.due(replyNow,diagAt);if(diag)diagAt=replyNow+DiagnosticsCadence.INTERVAL_MS;
-   Bundle b=new Bundle();b.putBoolean("diag",diag);
-   if(diag){b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",expansion==null?"No bridge":expansion.trace);b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putString("handoff",dual?concurrent.status:handoff.status);b.putString("raw",raw);}
+   Bundle b=new Bundle();b.putBoolean("diag",diag);b.putBundle("incomingHold",concurrent.incomingHoldInfo());if(SystemClock.elapsedRealtime()-screenshotTraceSentAt>=500){b.putString("screenshotTrace",concurrent.trace()+"\n"+handoff.trace()+"\n"+closureState.report());screenshotTraceSentAt=SystemClock.elapsedRealtime();}
+   if(diag){b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",expansion==null?"No bridge":expansion.trace);b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putString("handoff",dual?concurrent.status:handoff.status);b.putString("raw",raw);b.putString("closedHingeGate",closedHingeGate.report());}
    b.putBoolean("effectAllowed",effectAllowed);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);reply.writeNoException();reply.writeBundle(b);return true;}
   if(code==3){stop();reply.writeNoException();return true;}return super.onTransact(code,data,reply,flags);
  }
- private synchronized void stop(){previewAllowed=false;if(rotation!=null){rotation.close();retiringRotation=rotation;retiringSince=SystemClock.elapsedRealtime();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.shutdown();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
+ private synchronized void stop(){closedHingeGate.reset();previewAllowed=false;if(rotation!=null){rotation.close();retiringRotation=rotation;retiringSince=SystemClock.elapsedRealtime();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.shutdown();concurrent.releaseForTeardown();handoff.releaseForTeardown();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
  private synchronized void start(String action){
   stop();logLines=matchingResponses=staleResponses=0;count=0;unique.clear();angle=Float.NaN;min=180;max=0;last=0;raw="";state="Starting log reader";final int gen=generation;
   Thread reader=new Thread(()->{

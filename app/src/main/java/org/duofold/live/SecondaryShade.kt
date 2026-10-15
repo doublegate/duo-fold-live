@@ -12,6 +12,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -25,10 +27,11 @@ import androidx.lifecycle.*
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /** The outgoing panel shows only its own pre-switch frame; incoming content stays native. */
-internal class SecondaryShade(private val service:AccessibilityService,display:Display,private val intensity:Float,private val preview:Boolean=false,private val nativeContent:Boolean=false,private val event:(String)->Unit):Presentation(service,display,android.R.style.Theme_Material_NoActionBar){
+internal class SecondaryShade(private val service:AccessibilityService,display:Display,private val intensity:Float,private val preview:Boolean=false,private val nativeContent:Boolean=false,private val blackOnly:Boolean=false,private val event:(String)->Unit):Presentation(service,display,android.R.style.Theme_Material_NoActionBar){
  private val life=OverlayOwner()
  private var compose:ComposeView?=null
  private var coverAspect=.63f
+ private var landscapeCoverAspect=0f
  private val frostedReflection=service.getSharedPreferences("standalone",0).getBoolean("frosted_reflection",true)
  private var inner=false
  private var mirrorReady=false
@@ -36,12 +39,16 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
  private var mirrorView:LivePanelSurface?=null
  var strength=0f;private set
  var draws=0;private set
- val layer:String get()=if(nativeContent) "Transparent native inner animation" else if(preview) "Live cover preview; ready=$mirrorReady; ${LiveAngles.mirrorStatus}" else "Frozen outgoing ${if(inner) "inner" else "cover"}; own frame=${HandoffFrames.forPanel(inner)!=null}"
- val ready:Boolean get()=isShowing && draws>0 && (if(nativeContent)true else if(preview)mirrorReady else HandoffFrames.forPanel(inner)!=null) && display.state==Display.STATE_ON
+ val layer:String get()=if(blackOnly) "Plain Fade opaque inner hold" else if(nativeContent) "Transparent native inner animation" else if(preview) "Live cover preview; ready=$mirrorReady; ${LiveAngles.mirrorStatus}" else "Frozen outgoing ${if(inner) "inner" else "cover"}; own frame=${HandoffFrames.forPanel(inner)!=null}"
+ val ready:Boolean get()=isShowing && draws>0 && (if(blackOnly||nativeContent)true else if(preview)mirrorReady else HandoffFrames.forPanel(inner)!=null) && display.state==Display.STATE_ON
  fun refresh(){compose?.invalidate()}
  override fun onCreate(saved:Bundle?){
   super.onCreate(saved);life.registry.currentState=Lifecycle.State.CREATED
   service.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(0)?.mode?.let{coverAspect=it.physicalWidth.toFloat()/it.physicalHeight}
+  service.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(0)?.let{source->
+   val size=android.graphics.Point();source.getRealSize(size)
+   if(size.x>size.y && size.y>0)landscapeCoverAspect=size.x.toFloat()/size.y
+  }
   val mode=display.mode
   inner=minOf(mode.physicalWidth,mode.physicalHeight).toFloat()/maxOf(mode.physicalWidth,mode.physicalHeight)>.7f
   val view=ComposeView(context);compose=view
@@ -52,7 +59,9 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
    CompositionLocalProvider(LocalConfiguration provides context.resources.configuration,LocalHinge provides null){
     val frozen=HandoffFrames.forPanel(inner)
     Box(Modifier.fillMaxSize().background(if(nativeContent)androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Black)){
-     if(nativeContent){
+     if(blackOnly){
+      // Opaque black only: no wallpaper, frozen frame, or mirrored content.
+     }else if(nativeContent){
       DuoLiveShade(object:StandaloneFoldHost{
        override fun onMovement(){}
        override fun onFrame(active:Boolean,strength:Float){this@SecondaryShade.strength=strength}
@@ -61,9 +70,15 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
       AndroidView(factory={LivePanelSurface(it){ok,note->mirrorReady=ok;PreviewTransition.previewReady(ok);if(ok && !leftStarted){leftStarted=true;event("Right preview committed; starting reflected left preview")};event(note)}.also{mirrorView=it}},modifier=Modifier.fillMaxSize())
       BoxWithConstraints(Modifier.fillMaxSize()){
        // Geometry must not depend on the shared frame: surface creation clears that frame.
-       val left=maxWidth-maxHeight*coverAspect
+       val rotated=landscapeCoverAspect>0f
+       val dr=display.rotation
+       val horizontalHinge=rotated && dr%2==1
+       val left=if(rotated){if(horizontalHinge)maxWidth else maxWidth/2} else maxWidth-maxHeight*coverAspect
+       val regionHeight=if(horizontalHinge)maxHeight/2 else maxHeight
+       val regionX=if(rotated && dr==2)maxWidth/2 else androidx.compose.ui.unit.Dp(0f)
+       val regionY=if(horizontalHinge && dr==1)maxHeight/2 else androidx.compose.ui.unit.Dp(0f)
        if(!frostedReflection && leftStarted && left.value>0 && coverAspect<.7f){
-        Box(Modifier.fillMaxHeight().width(left)){
+        Box(Modifier.offset(regionX,regionY).width(left).height(regionHeight)){
          DuoLiveShade(object:StandaloneFoldHost{
           override fun onMovement(){}
           override fun onFrame(active:Boolean,strength:Float){}
@@ -83,7 +98,7 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
   }
   setContentView(view)
   window?.apply{
-   setBackgroundDrawable(ColorDrawable(if(nativeContent)Color.TRANSPARENT else Color.BLACK));if(nativeContent)setFormat(android.graphics.PixelFormat.TRANSLUCENT) else addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+   setBackgroundDrawable(ColorDrawable(if(nativeContent)Color.TRANSPARENT else Color.BLACK));if(nativeContent)setFormat(android.graphics.PixelFormat.TRANSLUCENT) else if(!blackOnly)addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
    addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
    attributes=attributes.apply{setFitInsetsTypes(0);layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;title=if(nativeContent)"Duo native inner animation" else if(preview)"Duo live cover preview" else "Duo outgoing frozen panel"}
   }

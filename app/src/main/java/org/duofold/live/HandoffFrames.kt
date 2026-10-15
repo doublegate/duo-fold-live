@@ -12,7 +12,7 @@ internal object HandoffFrames {
  @JvmStatic fun readySource():Int=ready
  @JvmStatic fun clear(){generation++;frame=null;preparing=false;active=false;ready=-1;readyAt=0;status="Freeze handoff idle"}
  fun forPanel(inner:Boolean):GlassFrame?=frame?.takeIf{sourceInner==inner}
- @JvmStatic fun update(inner:Boolean,dual:Boolean,angle:Float,fresh:Boolean,openThreshold:Float,enabled:Boolean){
+ @JvmStatic fun update(inner:Boolean,dual:Boolean,angle:Float,fresh:Boolean,openThreshold:Float,enabled:Boolean,labelled:Boolean,showLabel:Boolean){
   val now=SystemClock.elapsedRealtime()
   if(!enabled || !fresh){
    if(unavailableSince==0L)unavailableSince=now
@@ -23,12 +23,12 @@ internal object HandoffFrames {
   unavailableSince=0L
   if(dual){active=true;return}
   if(active){clear();return}
-  if(!FoldThreshold.canStart(angle,openThreshold)){clear();return}
+  if(!(if(labelled)ScreenshotStartupPolicy.mayStart(inner,angle,openThreshold) else FoldThreshold.canStart(angle,openThreshold))){clear();return}
   if(ready>=0){if(inner!=sourceInner || now-readyAt>1500){clear();retryAt=now+200};return}
   if(preparing || now<retryAt)return
   preparing=true;sourceInner=inner;val gen=++generation
   status="Capturing outgoing ${if(inner) "inner" else "cover"} before display switch"
-  GlassFrames.freeze{captured,note->
+  GlassFrames.freeze(labelled&&showLabel){captured,note->
    if(gen!=generation)return@freeze
    preparing=false
    val nowCapture=SystemClock.elapsedRealtime()

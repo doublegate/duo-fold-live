@@ -1,3 +1,13 @@
+## Next build requirement — October 4, 2026
+
+User requested after testing 3.5.3-alpha.29: block Screenshot Mode from selection because incoming-screen ghosting remains unresolved. Superseded by the subsequent authorized alpha.30 build: normal taps show Coming soon; a continuous 10-second hold unlocks Screenshot Mode for testing.
+
+- Make Screenshot Mode unavailable in Folding Mode (blocked selection with a Coming soon dialog).
+- Use Live Screen; migrate existing Screenshot Mode selections to Live Screen on that build and prevent the Developer dual-screen switch from bypassing the restriction until the hold gesture unlocks testing.
+- Keep animation styles independent and available under Live Screen.
+- Retain the screenshot implementation internally for future investigation. Keep endpoint screenshot hold and black fade disabled.
+- Do not claim ghosting fixed. Resume screenshot work only with evidence distinguishing raw capture, shader output, and compositing.
+
 # Ordered priorities — September 24, 2026
 
 Preserve existing working functionality and the approved animation. Scope each pass narrowly; do not claim device fixes from compilation alone. Keep the community tutorial near the top of future posts and READMEs: https://www.youtube.com/watch?v=8Ucm7ceBDN4 (made by an app user).

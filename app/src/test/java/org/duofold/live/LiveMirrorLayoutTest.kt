@@ -3,6 +3,18 @@ import org.junit.Assert.*
 import org.junit.Test
 class LiveMirrorLayoutTest {
  @Test fun portraitCoverFitsInnerWithoutStretching(){val fit=LiveMirrorLayout.fit(1248,1972,2448,1848);assertEquals(1848f/1972,fit[0],.0001f);assertTrue(fit[1]>0);assertEquals(2448f,fit[1]+1248f*fit[0],.001f);assertEquals(0f,fit[2],.001f)}
+ @Test fun landscapeRotationsPreserveContentAndPhysicalSide(){LandscapePreviewGeometryChecks.verify()}
+ @Test fun portraitPreviewPreservesOriginalFit(){
+  val old=LiveMirrorLayout.fit(1248,1972,2448,1848)
+  val p=LiveMirrorLayout.preview(1248,1972,2448,1848)
+  assertArrayEquals(floatArrayOf(old[0],old[0],old[1],old[2],0f,0f,1248f,1972f),p,0f)
+ }
+ @Test fun portraitGeometryRemainsIdenticalAcrossPanelSizes(){
+  for((w,h) in listOf(2448 to 1848,1848 to 2448,2208 to 1768)){
+   val scale=minOf(w/1248f,h/1972f)
+   assertArrayEquals(floatArrayOf(scale,w-1248*scale,(h-1972*scale)/2f),LiveMirrorLayout.fit(1248,1972,w,h),0f)
+  }
+ }
  @Test fun sameAspectHasNoBars(){assertArrayEquals(floatArrayOf(2f,0f,0f),LiveMirrorLayout.fit(100,200,200,400),.001f)}
  @Test(expected=IllegalArgumentException::class) fun invalidSurfaceRejected(){LiveMirrorLayout.fit(0,100,100,100)}
  @Test fun innerProjectionFillsCoverWithoutBarsOrStretch(){

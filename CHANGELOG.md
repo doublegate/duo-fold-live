@@ -4,10 +4,10 @@ No setting, default or version changes. Every item applies to all supported mode
 
 Display overrides (cover blanking on close)
 
-- Releasing a concurrent display override (cover state 5 or inner state 4) while the hinge's base device state is still HALF_OPENED goes 5->2->0 (or 4->2->0), and Samsung treats 2->0 as a sleep transition: the cover blanks. Duo's 2° closed threshold fires before the base state reports CLOSED, so every release of a held override now waits for CLOSED (`CloseReleaseGate`), bounded at 3 s and lifted at once when reopening (≥ 98°) or with the display off.
+- Releasing a concurrent display override (cover state 5 or inner state 4) while the hinge's base device state is still HALF_OPENED goes 5->2->0 (or 4->2->0), and Samsung treats 2->0 as a sleep transition: the cover blanks. Duo's 2° closed threshold fires before the base state reports CLOSED, so every release of a held override now waits for CLOSED (`CloseReleaseGate`), bounded at 3 s and lifted at once when reopening (at or above the handoff angle) or with the display off.
 - Gated paths: the direct-mode release at closed, stale-angle/locked releases, the hold policy's own release, the continuity probe's finish, Fold-Only/Unfold-Only turning the effect off mid-fold, dual mode's outer (cover) session and toggling dual mode. Reader teardown waits up to 3 s for CLOSED before cancelling.
 - The gate's "display off" escape uses `PowerManager.isInteractive()` alone, sent as a new trailing field of the angle poll (older clients fall back to the previous flag). Locking, a service restart or disabling Duo mid-close no longer releases with the screen on.
-- A system cancel of the cover request resets the hold policy, so the cover is requested again on the next sample. A direct-mode inner hold that reaches closed without passing 94° hands over to the gated cover hold.
+- A system cancel of the cover request resets the hold policy, so the cover is requested again on the next sample. A direct-mode inner hold that reaches closed without passing the closing angle (handoff angle − 4°) hands over to the gated cover hold.
 - The base-state query is cached (reflection resolved once, at most one system call per 16 ms) and made only after the cheap escapes.
 - The closing-mirror black mask deactivates 1.8 s after the secondary panel is gone; it stayed active for as long as the phone was closed and could start the next opening masked.
 
@@ -41,6 +41,16 @@ Review fixes
 - The glass source-size lookup clears its reused output first, so an absent display cannot leave stale dimensions.
 
 Tests: `CloseReleaseGateTest`, `ReleaseDeferralTest`, `MirrorAttachGateTest`, `AngleParserTest`, `DiagnosticsCadenceTest`, `AdaptiveCaptureRateTest`, `GlassFrameRetentionTest`, and additions to `HandoffPolicyTest`, `DirectHandoffPolicyTest`, `ClosingMirrorFadePolicyTest` and `PollCadenceTest`.
+
+# 3.5.4 — Cover-close continuity and motion presets
+
+- Promote the user-tested alpha.7 normal-mode closure behavior: let Android release the cover request at full closure, with the same 1000 ms fallback and cancellation safeguards. User testing on SM-F971U reported that the full-close blackout disappeared. The separate mid-fold display-switch blackout remains.
+- Add Smooth (120 ms) and Fast (30 ms) beneath Motion smoothness, using the Animation Behavior selection style. Each preset immediately sets the slider. Manual slider values remain available; Reset smoothness selects Smooth.
+- Smooth is the new default, applied once on install/upgrade. Later preset and manual choices persist.
+- Remove the obsolete closing cover power-pulse experiment, its toggle, and its saved setting.
+- Include the user-confirmed landscape preview fix: clean and reflected cover previews follow the physical hinge and fit their display orientation.
+- Retain bounded fold-only wake recovery and closure diagnostics. No change to the tested closure timeout or rendering geometry during stable promotion.
+- Known limits: tested on SM-F971U / Android 17. Screenshot mode remains experimental; custom-wallpaper unlock flashing and the mid-fold display switch remain separate issues.
 
 ## 1.6.0 — Tested performance release
 

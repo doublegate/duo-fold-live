@@ -34,17 +34,20 @@ final class InnerLiveMirror {
    boolean accepted=(boolean)Class.forName("android.view.IWindowManager").getMethod("mirrorDisplay",int.class,SurfaceControl.class).invoke(wm,0,mirror);
    if(!accepted||!mirror.isValid())throw new IllegalStateException("WindowManager refused live mirror");
    if(Math.min(sw,sh)/(float)Math.max(sw,sh)>.7f || Math.min(dw,dh)/(float)Math.max(dw,dh)<=.7f)throw new IllegalStateException("Cover-to-inner preview only");
-   float[] fit=LiveMirrorLayout.fit(sw,sh,width,height);
+   int sr=source.getClass().getField("rotation").getInt(source),dr=dest.getClass().getField("rotation").getInt(dest);
+   boolean landscape=sw>sh;
+   float[] legacy=landscape?null:LiveMirrorLayout.fit(sw,sh,width,height);
+   float[] matrix=landscape?LandscapePreviewLayout.transform(sw,sh,sr,width,height,dr,false):new float[]{legacy[0],0,0,legacy[0],legacy[1],legacy[2]};
    java.util.concurrent.CountDownLatch committed=new java.util.concurrent.CountDownLatch(1);
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
-    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,mirror,fit[0],0f,0f,fit[0]);
+    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,mirror,matrix[0],matrix[1],matrix[2],matrix[3]);
     t.addTransactionCommittedListener(Runnable::run,committed::countDown);
-    t.reparent(mirror,parent).setLayer(mirror,1).setCrop(mirror,new Rect(0,0,sw,sh)).setPosition(mirror,fit[1],fit[2]).setVisibility(mirror,true).apply();
+    t.reparent(mirror,parent).setLayer(mirror,1).setCrop(mirror,new Rect(0,0,sw,sh)).setPosition(mirror,matrix[4],matrix[5]).setVisibility(mirror,true).apply();
    }
    if(!committed.await(250,java.util.concurrent.TimeUnit.MILLISECONDS))throw new IllegalStateException("Right preview commit not yet confirmed; retrying");
    // Revoked (preview no longer allowed, or reader stopped) while this attach was in flight: close what it built.
    if(!gate.valid(ticket))throw new IllegalStateException("Preview revoked during attach");
-   built=mirror;owner=id;status="Live cover → inner preview (right aligned; normal handoff)";result.putBoolean("ok",true);
+   built=mirror;owner=id;status="Live cover → inner preview; source="+sw+"x"+sh+" r="+sr+" destination="+width+"x"+height+" r="+dr+" matrix="+java.util.Arrays.toString(matrix);result.putBoolean("ok",true);
   }catch(Exception e){close();Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();status="Cover mirror unavailable: "+cause.getClass().getSimpleName()+": "+cause.getMessage();}
   finally{if(parent!=null)parent.release();Binder.restoreCallingIdentity(identity);lock.unlock();}
   // A revoke between the check above and the unlock finds the lock held, so its tryLock skips the close. Re-check
