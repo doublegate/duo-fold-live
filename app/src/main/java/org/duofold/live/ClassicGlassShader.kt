@@ -1,6 +1,6 @@
 package org.duofold.live
 
-/** Preserved 1.4.3 glass shader. */
+/** Classic projection with a bounded cover stretch and inward inner-panel fold. */
 internal object ClassicGlassShader {
  val source="""
  uniform shader content;
@@ -21,6 +21,10 @@ internal object ClassicGlassShader {
  uniform float2 sampleScale;
  uniform float2 sampleOffset;
  uniform float progress;
+ uniform float classicPreset;
+ uniform float verticalCompression;
+ uniform float foldRadians;
+ uniform float opaqueContent;
  uniform float inner;
  uniform float fallback;
  uniform float horizontal;
@@ -61,6 +65,9 @@ internal object ClassicGlassShader {
   return x-stretch;
  }
 
+ // Zero slope at both ends avoids the old late stretch surge.
+ float classicCoverScale(float p){return 1.0+0.28*smoothstep(0.0,1.0,p);}
+ float classicInnerWidth(float p){return mix(1.0,0.16,smoothstep(0.0,1.0,p));}
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -99,6 +106,36 @@ internal object ClassicGlassShader {
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
   }
+  // Destination-to-source mapping: expanding source distance compresses the
+  // visible inner image TOWARD the hinge; opening traverses the same curve backward.
+  // Keep the cover bounded instead of the near-singular 90-degree stretch.
+  if(classicPreset>0.5){
+   float h=inner>0.5 ? (fallback>0.5 ? 1.0 : 0.5) : 0.0;
+   float mappedAxis=inner>0.5
+    ? h+(axis-h)/classicInnerWidth(progress)
+    : axis/classicCoverScale(progress);
+   float correctedClassic=mix(mappedAxis,1.0-mappedAxis,reverse);
+   if(horizontal>0.5)sourceUV.y=correctedClassic;else sourceUV.x=correctedClassic;
+  }
+  // Use Windowed Glass's cross-axis perspective, including the fixed cover
+  // edge and rotation handling. Keep Classic's horizontal mapping above intact.
+  if(classicPreset>0.5){
+   float across=mix(uv.y,uv.x,horizontal);
+   float c=cos(foldRadians), sn=sin(foldRadians);
+   float panelWidth=inner>0.5 ? 15.7987 : 7.73936;
+   float px=inner>0.5 ? (-7.89935+axis*panelWidth) : (-0.23396-axis*panelWidth);
+   if(inner>0.5 && fallback>0.5)px=(axis-1.0)*7.89935;
+   float py=(1.0-across)*11.1035+0.34562-5.8974;
+   float pz=inner>0.5 ? 0.24948 : -0.27463;
+   if(inner<0.5 || px<0.0){float z=pz-0.275454;pz=-sn*px+c*z+0.275454;}
+   float projectedY=py*(0.24948-40.0)/(pz-40.0);
+   if(inner<0.5){
+    float foldedZ=-sn*(-0.23396)+c*(-0.27463-0.275454)+0.275454;
+    projectedY/=(0.24948-40.0)/(foldedZ-40.0);
+   }
+   float projectedAcross=1.0-(projectedY-(0.34562-5.8974))/11.1035;
+   if(horizontal>0.5)sourceUV.x=projectedAcross;else sourceUV.y=projectedAcross;
+  }
   float seamMask=0.0;
   if(inner>0.5 && fallback<0.5 && seamOffset>0.0){
    seamMask=1.0-smoothstep(max(0.5,0.5+seamOffset-0.05),0.5+seamOffset,axis);
@@ -107,6 +144,11 @@ internal object ClassicGlassShader {
   // Cover startup: reach opacity before separating the captured image from
   // the live image below it. Smooth geometry only within the first few degrees.
   if(windowReveal>0.5 && startupEasing>0.5)sourceUV=mix(uv,sourceUV,smoothstep(0.015,0.05,progress));
+  if(classicPreset>0.5 && verticalCompression!=1.0){
+   float compression=clamp(verticalCompression,0.0,2.0);
+   if(horizontal>0.5)sourceUV.x=uv.x+(sourceUV.x-uv.x)*compression;
+   else sourceUV.y=uv.y+(sourceUV.y-uv.y)*compression;
+  }
   sourceUV=sourceUV*sampleScale+sampleOffset;
   float blurEdge=edge;
   if(inner>0.5 && fallback<0.5)blurEdge=(edge+2.0*seamOffset)/(1.0+2.0*seamOffset);
@@ -131,7 +173,7 @@ internal object ClassicGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
+  float alpha=opaqueContent>0.5?1.0:smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }

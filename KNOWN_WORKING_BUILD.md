@@ -1,3 +1,13 @@
+# Current release baseline — 3.5.4
+
+User approved 3.5.4-alpha.7 cover-close behavior for stable promotion on 2026-10-12 after reporting that the full-close blackout totally disappeared on SM-F971U / Android 17. Stable 3.5.4 adds requested Smooth (120 ms default) / Fast (30 ms) presets and removes the unused closing power-pulse experiment. The tested closure behavior and geometry are retained.
+
+- Tested alpha: [ci-161-1](https://github.com/joeconsorti/duo-fold-live/releases/tag/ci-161-1), source `4320933c746e34f933b4e2fe86c283a7de935640`.
+- Stable: [v3.5.4](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.4).
+- Preserve all historical releases and signing identity. Optical behavior still requires handset testing; the separate mid-fold switch and wallpaper unlock flash are not claimed fixed.
+
+## Historical wallpaper rollback record
+
 # Wallpaper rollback baseline — preserve alpha.13
 
 **Current user-approved best version: 3.5.1, based on the user-tested 3.5.1-alpha.9 and approved for main/latest on 2026-09-26.** The user still observes occasional immediate/delayed unlock flashing. Alpha.13 remains the preserved original partly working rollback baseline; do not delete or rewrite it. Automated checks alone do not establish visual correctness.

@@ -9,7 +9,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 
 | Value | Fold 7 | Upstream | Source | Why |
 | --- | --- | --- | --- | --- |
-| Full-black angle, closing / opening | 94 / 101 deg | 94 / 98 deg | `blackAnglesFor` | Measured switch at 92-94 deg closing, 101-102 deg opening (wallpaper angle log vs DisplayManager). |
+| Full-black angle, closing / opening | hold angle / handoff + 3 deg (94 / 101 at a 98 deg handoff; 81 / 88 at the 85 deg default) | hold angle / handoff angle | `blackAnglesFor`, `coverLagFor` | Measured switch at 92-94 deg closing, 101-102 deg opening with a 98 deg handoff (wallpaper angle log vs DisplayManager). Since 3.5.4 the handoff angle is a setting, so both follow it. |
 | Reveal cap, no-glass path | ON+40 ms | ON+900 ms | `readyTimeoutFor` | Duo draws only on new angles; the wallpaper sends none for 0.3-0.5 s after a switch. |
 | Reveal cap, opening (unified) | ON+600 ms | ON+900 ms | `openingReadyTimeoutFor` | First inner glass frame commits 300-450 ms after the switch; revealing earlier exposed the mirrored hold. |
 | Reveal cap, closing (unified) | ON+380 ms | ON+900 ms | `closingReadyTimeoutFor` | The cover draws faster than the inner panel; 300 ms capped 3/10 closes whose frames landed at ON+260-380 ms. |
@@ -35,7 +35,7 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 | --- | --- | --- | --- |
 | Unified mode | on | off | The glass shader draws the inner left strip before the switch, so perspective corners, blur and timing are continuous. |
 | Left-strip perspective profile | inner profile (early/end stretch, vertical compression, startup easing) | cover profile | Matches the post-switch leaf; the inner sliders tune both sides. |
-| Reflection maximum hinge | 55 deg, then eased (`StripPose`) to the inner pose at the switch (hinge 77.9 deg at 101 deg; blur factor 1 -> 1.25) | — | Edge-on collapse ~0.6 s before the switch; holding the cap froze the strip for ~46 deg and jumped at the reveal. |
+| Reflection maximum hinge | 55 deg, then eased (`StripPose`) to the inner pose at the switch (hinge 77.9 deg at the 101 deg switch of a 98 deg handoff; blur factor 1 -> 1.25) | — | Edge-on collapse ~0.6 s before the switch; holding the cap froze the strip for ~46 deg and jumped at the reveal. |
 | Pane layout | left strip 0..w/2, mirror fills w/2..w (scale 984/1080, centered, ~56 px cropped top/bottom); reflection same uniform scale; hold same layout; upright panels only | strip w - h*coverAspect, mirror fitted | The pane edge moved 48 px at the switch; the reflection was stretched ~10 %. |
 | Glass edge darkening cap | 0.55 | 1.0 | Blacked the panel out around 104-114 deg while closing. |
 | Mirrored-hold fade at reveal | 0 ms when ready, else 120 ms | 120 ms | Removed a double exposure at the cut-over. |
@@ -44,15 +44,15 @@ model keeps the upstream value in the "Upstream" column. Values marked **all mod
 
 | Value | Fold 7 | Why |
 | --- | --- | --- |
-| Preview mirror blur, opening (before the switch) | smoothstep 0 px at 0 deg to 56 px at 101 deg, glide time constant 40 ms, 8 ms ticks while moving | The full-resolution compositor mirror stayed sharp, then jumped to the blurred glass. |
-| Right-half blur after the switch | 56 px at 101 deg, then the left glass's curve `smoothstep((172-a)/(172-90))` rescaled to that maximum, 0 at the open threshold; glide = `preview_blur_smooth_ms`; 0 at once when the cover is primary or the panel is rotated | The glass shader leaves the inner right half transparent, exposing the sharp native screen; the blur jumped 56 px -> 0 across the black, and then eased faster than the left half. |
+| Preview mirror blur, opening (before the switch) | smoothstep 0 px at 0 deg to 56 px at the opening switch angle (101 deg at a 98 deg handoff), glide time constant 40 ms, 8 ms ticks while moving | The full-resolution compositor mirror stayed sharp, then jumped to the blurred glass. |
+| Right-half blur after the switch | 56 px at the opening switch angle, then the left glass's curve `smoothstep((172-a)/(172-90))` rescaled to that maximum, 0 at the open threshold; glide = `preview_blur_smooth_ms`; 0 at once when the cover is primary or the panel is rotated | The glass shader leaves the inner right half transparent, exposing the sharp native screen; the blur jumped 56 px -> 0 across the black, and then eased faster than the left half. |
 | No-frame fallback | darkening capped at 0.55 (unified); nothing drawn below 6 % glass amount | The fallback reached solid black and was drawn invisibly at the endpoints. |
 
 ## Display overrides (`CloseReleaseGate`, `CoverHandoff`, `ConcurrentController`, `BaseDeviceState`) — all models
 
 | Value | Setting | Why |
 | --- | --- | --- |
-| Release condition for a held override | base state CLOSED, or reopening >= 98 deg, or display off, or 3 s | 5->2->0 is a sleep transition on Samsung (`sleepDevice=true`), blanking the cover. |
+| Release condition for a held override | base state CLOSED, or reopening at or above the handoff angle, or display off, or 3 s | 5->2->0 is a sleep transition on Samsung (`sleepDevice=true`), blanking the cover. |
 | "Display off" input | `PowerManager.isInteractive()` only | Locked / service restarting / disabled do not make the sleep harmless. |
 | Teardown wait | up to 3 s for CLOSED | Reader stop, Shizuku destroy and restart cancel the override. |
 | Base-state query rate | at most every 16 ms, after the cheap escapes | Runs on the 4 ms poll under the reader lock during a defer. |

@@ -9,6 +9,9 @@ final class InnerLiveMirror {
  private volatile SurfaceControl blur;
  private volatile java.lang.reflect.Method blurRadius;
  private volatile float blurStart=0,blurEnd=101,blurMax=56,blurTau=40,lastBlur=-1;
+ /** Configured handoff angle from the poll; the preview blur ends where the panels switch while opening. */
+ private volatile float handoffAngle=HandoffSettings.DEFAULT;
+ void handoff(float value){handoffAngle=HandoffSettings.angle(value);}
  private volatile float target=Float.NaN;private float shown=Float.NaN;private long tickAt;
  private final HandlerThread ticker=new HandlerThread("duo-preview-blur");
  private Handler tick;
@@ -71,11 +74,16 @@ final class InnerLiveMirror {
    boolean accepted=(boolean)Class.forName("android.view.IWindowManager").getMethod("mirrorDisplay",int.class,SurfaceControl.class).invoke(wm,0,mirror);
    if(!accepted||!mirror.isValid())throw new IllegalStateException("WindowManager refused live mirror");
    if(Math.min(sw,sh)/(float)Math.max(sw,sh)>.7f || Math.min(dw,dh)/(float)Math.max(dw,dh)<=.7f)throw new IllegalStateException("Cover-to-inner preview only");
-   float[] fit=halfPane?LiveMirrorLayout.rightHalf(sw,sh,width,height):LiveMirrorLayout.fit(sw,sh,width,height);
+   int sr=source.getClass().getField("rotation").getInt(source),dr=dest.getClass().getField("rotation").getInt(dest);
+   boolean landscape=sw>sh;
+   // Unified Fold 7 half pane (portrait only); a landscape cover uses upstream's hinge-relative transform.
+   boolean half=halfPane&&!landscape;
+   float[] fit=landscape?null:(half?LiveMirrorLayout.rightHalf(sw,sh,width,height):LiveMirrorLayout.fit(sw,sh,width,height));
+   float[] matrix=landscape?LandscapePreviewLayout.transform(sw,sh,sr,width,height,dr,false):new float[]{fit[0],0,0,fit[0],fit[1],fit[2]};
    blurStart=BlurTuning.start();blurMax=BlurTuning.max();
-   blurEnd=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL)[1];blurTau=BlurTuning.smoothMs();
+   blurEnd=HandoffFadePolicy.blackAnglesFor(android.os.Build.MODEL,handoffAngle)[1];blurTau=BlurTuning.smoothMs();
    // Unified half-pane preview only (Fold 7 tuning); every other path keeps its original sharp preview.
-   if(halfPane)try{
+   if(half)try{
     SurfaceControl.Builder b=new SurfaceControl.Builder().setName("Duo preview progressive blur");
     SurfaceControl.Builder.class.getMethod("setEffectLayer").invoke(b);
     blur=b.build();
@@ -83,7 +91,7 @@ final class InnerLiveMirror {
    }catch(Exception e){if(blur!=null){blur.release();blur=null;}blurRadius=null;}
    java.util.concurrent.CountDownLatch committed=new java.util.concurrent.CountDownLatch(1);
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
-    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,mirror,fit[0],0f,0f,fit[0]);
+    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,mirror,matrix[0],matrix[1],matrix[2],matrix[3]);
     t.addTransactionCommittedListener(Runnable::run,committed::countDown);
     if(blur!=null){
      Rect bounds=new Rect(Math.round(fit[1]),Math.round(fit[2]),Math.round(fit[1]+sw*fit[0]),Math.round(fit[2]+sh*fit[0]));
@@ -91,13 +99,13 @@ final class InnerLiveMirror {
      t.reparent(blur,parent).setLayer(blur,2).setCrop(blur,bounds).setPosition(blur,0,0).setVisibility(blur,true);
      blurRadius.invoke(t,blur,0);
     }
-    t.reparent(mirror,parent).setLayer(mirror,1).setCrop(mirror,new Rect(0,0,sw,sh)).setPosition(mirror,fit[1],fit[2]).setVisibility(mirror,true).apply();
+    t.reparent(mirror,parent).setLayer(mirror,1).setCrop(mirror,new Rect(0,0,sw,sh)).setPosition(mirror,matrix[4],matrix[5]).setVisibility(mirror,true).apply();
    }
    if(!committed.await(250,java.util.concurrent.TimeUnit.MILLISECONDS))throw new IllegalStateException("Right preview commit not yet confirmed; retrying");
    if(!gate.valid(ticket))throw new IllegalStateException("Preview revoked during attach");
    if(blur!=null)tick.post(resetAndStart);
    if(BuildConfig.DIAGNOSTICS)android.util.Log.i("DuoBlur","attach blur="+(blur!=null)+" setter="+(blurRadius!=null)+" max="+blurMax+" start="+blurStart+" end="+blurEnd+" tau="+blurTau);
-   built=mirror;owner=id;status="Live cover → inner preview (right aligned; normal handoff)"+(blur!=null?"; progressive blur "+Math.round(blurMax)+" px from "+Math.round(blurStart)+"° to "+Math.round(blurEnd)+"°":"; progressive blur unavailable");result.putBoolean("ok",true);
+   built=mirror;owner=id;status="Live cover → inner preview; source="+sw+"x"+sh+" r="+sr+" destination="+width+"x"+height+" r="+dr+" matrix="+java.util.Arrays.toString(matrix)+(blur!=null?"; progressive blur "+Math.round(blurMax)+" px from "+Math.round(blurStart)+"° to "+Math.round(blurEnd)+"°":"; progressive blur unavailable");result.putBoolean("ok",true);
   }catch(Exception e){close();Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();status="Cover mirror unavailable: "+cause.getClass().getSimpleName()+": "+cause.getMessage();}
   finally{if(parent!=null)parent.release();Binder.restoreCallingIdentity(identity);lock.unlock();}
   // A revoke between the check above and the unlock finds the lock held, so its tryLock skips the close. Re-check

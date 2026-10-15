@@ -63,3 +63,45 @@ int main(){
         subprocess.run(['c++', '-O2', str(cpp), '-o', str(binary)], check=True)
         print(filename, flush=True)
         subprocess.run([str(binary)], check=True)
+
+# Classic's NEW preset deliberately contracts the inner image, unlike the legacy
+# stretch above. Exercise the actual shader functions, including endpoints.
+source = (ROOT / 'app/src/main/java/org/duofold/live/ClassicGlassShader.kt').read_text()
+code = '''
+#include <cmath>
+#include <cassert>
+float clamp(float v,float a,float b){return v<a?a:(v>b?b:v);}
+float mix(float a,float b,float t){return a+(b-a)*t;}
+float smoothstep(float a,float b,float v){float t=clamp((v-a)/(b-a),0,1);return t*t*(3-2*t);}
+'''
+code += '\n'.join(function(source,n) for n in ('classicCoverScale','classicInnerWidth'))
+code += '''
+int main(){
+ float lastCover=1,lastInner=1;
+ for(int i=0;i<=10000;i++){
+  float p=i/10000.f,c=classicCoverScale(p),w=classicInnerWidth(p);
+  assert(std::isfinite(c)&&std::isfinite(w));
+  assert(c>=lastCover && c<=1.28001f);
+  assert(w<=lastInner && w>=.15999f);
+  for(float hinge: {0.5f,1.f}){
+   float source=hinge*.25f;
+   float destination=hinge+(source-hinge)*w;
+   assert(destination>=source && destination<hinge);
+   float recovered=hinge+(destination-hinge)/w;
+   assert(std::abs(recovered-source)<1e-6f);
+  }
+  lastCover=c;lastInner=w;
+ }
+ assert(classicCoverScale(0)==1 && classicInnerWidth(0)==1);
+ // End slopes approach zero, without the late stretch acceleration.
+ assert(classicCoverScale(1)-classicCoverScale(.999f)<.00001f);
+ assert(classicInnerWidth(.999f)-classicInnerWidth(1)<.00001f);
+}
+'''
+code = '#include <initializer_list>\n'+code
+with tempfile.TemporaryDirectory() as folder:
+    cpp=Path(folder)/'classic.cpp';binary=Path(folder)/'classic'
+    cpp.write_text(code)
+    subprocess.run(['c++','-O2',str(cpp),'-o',str(binary)],check=True)
+    subprocess.run([str(binary)],check=True)
+print('PASS: Classic cover bounded and smooth; inner contracts toward hinge and reverses exactly')

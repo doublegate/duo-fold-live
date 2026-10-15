@@ -103,14 +103,10 @@ class SetupActivity : ComponentActivity() {
      loading=true;message="Preparing your photo…"
      scope.launch {
       runCatching {withContext(Dispatchers.IO){
-       val bitmap=ImageDecoder.decodeBitmap(ImageDecoder.createSource(contentResolver,uri)){decoder,info,_->
-        decoder.allocator=ImageDecoder.ALLOCATOR_SOFTWARE
-        val maximum=maxOf(info.size.width,info.size.height)
-        if(maximum>1600)decoder.setTargetSampleSize((maximum+1599)/1600)
-       }
+       val bitmap=WallpaperPhoto.decode(this@SetupActivity,uri)
        try {
         val temp=File(filesDir,"setup-photo.tmp")
-        temp.outputStream().use{check(bitmap.compress(Bitmap.CompressFormat.JPEG,90,it)){"Image encoding failed"}}
+        temp.outputStream().use{check(bitmap.compress(Bitmap.CompressFormat.JPEG,100,it)){"Image encoding failed"}}
         Files.move(temp.toPath(),File(filesDir,"photo.jpg").toPath(),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE)
        }finally{bitmap.recycle()}
       }}.onSuccess{hasPhoto=true;message="Photo selected. It will appear behind your home-screen icons."}

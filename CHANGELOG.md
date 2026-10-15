@@ -12,7 +12,8 @@ Compatibility
   commands there.
 
 Panel switch (Fold 7)
-- Full black at the measured switch angles (94 deg closing, 101 deg opening), reveal only on a real glass frame of
+- Full black where the panels actually switch: closing at the hold angle, opening 3 deg after the handoff angle
+  (94 / 101 deg at a 98 deg handoff, as measured; they follow the handoff setting), reveal only on a real glass frame of
   the new panel (opening cap ON+600 ms, closing ON+380 ms), 100 ms reveal, per-frame re-checks during a switch,
   700 ms fresh-content window (the first post-switch capture takes up to ~400 ms there).
 - Unified renderer (`debug.duofold.unified`, default on for the Fold 7): before the switch the inner panel's left half
@@ -52,6 +53,16 @@ Diagnostics
 - `fold7test` build type (release-optimized, debug-signed, diagnostic logs) and `BuildConfig.DIAGNOSTICS` for the
   `Duo*` log tags; `debug.duofold.record_visible`, `preview_blur_*`, `right_blur_clear`, `reflect_max_hinge`,
   `max_darken` debug properties (documented in the tuning reference).
+
+# 3.5.4 — Cover-close continuity and motion presets
+
+- Promote the user-tested alpha.7 normal-mode closure behavior: let Android release the cover request at full closure, with the same 1000 ms fallback and cancellation safeguards. User testing on SM-F971U reported that the full-close blackout disappeared. The separate mid-fold display-switch blackout remains.
+- Add Smooth (120 ms) and Fast (30 ms) beneath Motion smoothness, using the Animation Behavior selection style. Each preset immediately sets the slider. Manual slider values remain available; Reset smoothness selects Smooth.
+- Smooth is the new default, applied once on install/upgrade. Later preset and manual choices persist.
+- Remove the obsolete closing cover power-pulse experiment, its toggle, and its saved setting.
+- Include the user-confirmed landscape preview fix: clean and reflected cover previews follow the physical hinge and fit their display orientation.
+- Retain bounded fold-only wake recovery and closure diagnostics. No change to the tested closure timeout or rendering geometry during stable promotion.
+- Known limits: tested on SM-F971U / Android 17. Screenshot mode remains experimental; custom-wallpaper unlock flashing and the mid-fold display switch remain separate issues.
 
 ## 1.6.0 — Tested performance release
 

@@ -17,7 +17,7 @@ final class HandoffFade {
  void mirrorSubmitted(){mirrorSubmitted=SystemClock.elapsedRealtime();}
  private final SurfaceControl[] layers=new SurfaceControl[2];
  private volatile boolean enabled,closed,requireInnerGlass;
- private volatile float openThreshold=172;
+ private volatile float openThreshold=172,handoffAngle=HandoffSettings.DEFAULT;
  private static final class Draw {
   final boolean inner;final long when,captured;final int kind;
   Draw(boolean inner,long when,int kind,long captured){this.inner=inner;this.when=when;this.kind=kind;this.captured=captured;}
@@ -33,7 +33,7 @@ final class HandoffFade {
  private boolean lastRecord;
  private static final boolean FAST_SWITCH_TICKS=DeviceCompatibility.isFold7(Build.MODEL);
  private final Choreographer.FrameCallback frame=when->this.tick.run();
- void settings(float smoothing,float gradualness,boolean requireGlass,float open){this.smoothing=smoothing;this.gradualness=gradualness;requireInnerGlass=requireGlass;openThreshold=open;}
+ void settings(float smoothing,float gradualness,boolean requireGlass,float open,float handoff){handoffAngle=HandoffSettings.angle(handoff);blurSwitch=HandoffFadePolicy.blackAnglesFor(Build.MODEL,handoffAngle)[1];this.smoothing=smoothing;this.gradualness=gradualness;requireInnerGlass=requireGlass;openThreshold=open;}
  private volatile boolean idle;private volatile long lastMovedAt;
  // Right-half blur continuity (RightHalfBlur): one effect layer on the inner panel while it is primary.
  // Fold 7 unified renderer only: debug.duofold.unified=0 must leave the original path without this blur (review on PR #18).
@@ -56,7 +56,7 @@ final class HandoffFade {
  private Object dm,wm;private Method info,keyguard,stack,color,crop,colorLayer;
  private volatile boolean ticking;
  volatile String status="Handoff fade idle";
- HandoffFade(){float[] black=HandoffFadePolicy.blackAnglesFor(Build.MODEL);policy.blackAngles(black[0],black[1]);policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.openingReadyTimeout(HandoffFadePolicy.openingReadyTimeoutFor(Build.MODEL));policy.coverGlass(DeviceCompatibility.isFold7(Build.MODEL)&&UnifiedRenderer.enabled());policy.closingReadyTimeout(HandoffFadePolicy.closingReadyTimeoutFor(Build.MODEL));policy.freshWindow(HandoffFadePolicy.freshWindowFor(Build.MODEL));policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));blurSwitch=black[1];thread.start();handler=new Handler(thread.getLooper());}
+ HandoffFade(){policy.coverLag(HandoffFadePolicy.coverLagFor(Build.MODEL));policy.readyTimeout(HandoffFadePolicy.readyTimeoutFor(Build.MODEL));policy.openingReadyTimeout(HandoffFadePolicy.openingReadyTimeoutFor(Build.MODEL));policy.coverGlass(DeviceCompatibility.isFold7(Build.MODEL)&&UnifiedRenderer.enabled());policy.closingReadyTimeout(HandoffFadePolicy.closingReadyTimeoutFor(Build.MODEL));policy.freshWindow(HandoffFadePolicy.freshWindowFor(Build.MODEL));policy.revealBase(HandoffFadePolicy.revealBaseFor(Build.MODEL));blurSwitch=HandoffFadePolicy.blackAnglesFor(Build.MODEL,HandoffSettings.DEFAULT)[1];thread.start();handler=new Handler(thread.getLooper());}
  void update(boolean enabled,float angle,boolean fresh){
   long now=SystemClock.elapsedRealtime();boolean moved=fresh&&Float.compare(angle,this.angle)!=0;if(fresh){this.angle=angle;lastFresh=now;}
   if(moved)lastMovedAt=now;
@@ -107,7 +107,7 @@ final class HandoffFade {
    lastPrimary=now;
    policy.mapping((String)field(p,"uniqueId").get(p));
    boolean inner=Math.min(value(p,"logicalWidth"),value(p,"logicalHeight"))/(float)Math.max(value(p,"logicalWidth"),value(p,"logicalHeight"))>.7f;
-   policy.settings(smoothing,gradualness);
+   policy.settings(smoothing,gradualness);policy.handoff(handoffAngle);
    policy.renderer(requireInnerGlass,openThreshold);
    Draw evidence=lastDraw;
    float alpha=policy.opacity(now,inner,angle,true,value(p,"state")==2,evidence.when,evidence.inner,evidence.kind,evidence.captured);

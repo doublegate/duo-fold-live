@@ -1,8 +1,8 @@
 ![DuoFold Live](docs/assets/duofold-live-logo.svg)
 
-# Duo Fold Live · 3.5.3
+# Duo Fold Live · 3.5.4
 
-**Current official release: 3.5.3.** Occasional unlock wallpaper flashing remains a known issue. For Keep Awake, disable Samsung’s “Lock when folded”; see troubleshooting. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
+**Current official release: 3.5.4.** Occasional unlock wallpaper flashing remains a known issue. For Keep Awake, disable Samsung’s “Lock when folded”; see troubleshooting. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
 
 ## 📺 Step-by-step installation tutorial
 **New here? [Watch the full setup walkthrough on YouTube](https://www.youtube.com/watch?v=8Ucm7ceBDN4).**
@@ -11,9 +11,16 @@ Created by a Duo Fold Live user—not by me. Huge thanks for putting this togeth
 
 An iPhone Duo-inspired folding animation for the **Samsung Galaxy Z Fold 8**, with windowed glass, live cover previews, and smooth black fades around Samsung’s display handoff. Free and open source. Runs over One UI and ordinary apps without replacing your launcher.
 
-**[Download 3.5.3](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.3 release notes](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.3) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
+**[Download 3.5.4](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.4 release notes](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.4) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
 
 **Only tested on the Z Fold 8 (SM-F971U).** Fold 8 Ultra, Fold 7, and other devices are unverified. Do not expect compatibility. Model recognition includes regional SM-F971, SM-F976, and SM-F966 families. Unknown models display a warning and may proceed. Android 17 and the existing Samsung wallpaper/API checks are still required. Recognition is not verified compatibility.
+
+## What's new in 3.5.4
+
+- **Cover stays on at full closure:** adopts the user-tested Android-managed release behavior with a bounded fallback. The full-close blackout disappeared in SM-F971U testing; the separate mid-fold display switch remains.
+- **Smooth / Fast motion presets:** Smooth selects 120 ms and is the new default; Fast selects 30 ms. Both update the slider, which remains available for custom values. Reset selects Smooth. The new default is applied once on upgrade.
+- **Landscape previews fixed:** clean and reflected cover content follows the physical hinge and fits the current orientation.
+- **Simpler controls:** remove the obsolete closing cover power-pulse experiment.
 
 > **Galaxy Z Fold 7 (SM-F966) on Android 16:** accepted on that family only and tuned on an SM-F966U1 (One UI 8.5). See `CHANGELOG.md` (Unreleased) and `docs/fold7/tuning-reference.md` for every Fold 7 value and debug property.
 
@@ -28,7 +35,7 @@ An iPhone Duo-inspired folding animation for the **Samsung Galaxy Z Fold 8**, wi
 - **Closed-hinge jitter protection:** filters tiny closed-phone angle excursions to reduce unintended preview/display activation.
 - **Clearer diagnostics and testing boundaries:** a shorter primary status report, optional health history, richer handoff/connection traces, and copyable Plain Fade settings. Screenshot Mode is marked coming soon and gated behind a 10-second hold for testing.
 
-Custom wallpaper unlock flashing and Samsung’s display-switch blackout remain unresolved. The experimental photo-wallpaper test is not a replacement for the working Samsung hinge-reader setup.
+Custom wallpaper unlock flashing and Samsung’s mid-fold display-switch blackout remain unresolved; 3.5.4 addresses the separate full-close blackout. The experimental photo-wallpaper test is not a replacement for the working Samsung hinge-reader setup.
 
 ## Updating from an older version
 
@@ -76,7 +83,7 @@ Available in Windowed Glass and Duo Classic; disabled for Plain Fade.
 
 - **V2 Window Reveal · experimental** is the default projection, with Original available for comparison. Cover early stretch defaults to 90%, end stretch to 125% (80–150%), and vertical compression to 90%. Separate inner controls default to 30% early stretch, 60% end stretch (0–150%), and 40% vertical compression. Both vertical sliders range from 0–200%; 100% retains the original perspective. Startup easing is on and toggleable. Duo Classic applies its own stretch, blur/glass, and stronger inner-compression tuning.
 
-- **Motion smoothness, blur amount, and glass strength** have separate controls and reset buttons. Defaults: 30 ms, 30%, and 100% respectively.
+- **Motion smoothness, blur amount, and glass strength** have separate controls and reset buttons. Defaults: Smooth (120 ms), 30%, and 100% respectively. Fast selects 30 ms; the slider also supports custom smoothness.
 - **Black fade smoothing and gradualness** let you shape the transition around Samsung’s display switch.
 - **Manual live-content targets:** 120 FPS experimental by default, or 60 FPS for lower GPU cost. No automatic switching based on the display’s reported refresh rate. These are targets, not guaranteed frame rates.
 - **Three anti-aliasing methods** in Advanced: **Lightweight Texture Filtering** (default), **Edge-Adaptive Smoothing**, and **4× Supersampling**. AA can be disabled or adjusted within a narrow strength range, independently of blur and glass strength. The two heavier methods remain experimental.
@@ -158,10 +165,10 @@ Tips do not unlock features or promise fixes. Bug reports, testing, and pull req
 
 Install JDK 17, Android SDK platform 36, and Android build tools. Set `ANDROID_HOME` or a local `sdk.dir` in `local.properties`.
 
-The stable 3.5.3 source is tagged **v3.5.3**. Check out that tag to reproduce this release.
+The stable 3.5.4 source is tagged **v3.5.4**. Check out that tag to reproduce this release.
 
 ```sh
-git checkout v3.5.3
+git checkout v3.5.4
 ./gradlew testReleaseUnitTest assembleRelease
 ```
 
@@ -190,3 +197,7 @@ Duo Fold Live is the name of this app. The following are separate upstream proje
 - **[Shizuku](https://github.com/RikkaApps/Shizuku)** and its API contributors: the ADB-assisted access used by the live angle reader and helpers.
 
 Thank you to the original authors and contributors. These credits do not imply their endorsement of this app. MIT for project code, subject to preserved third-party licenses; see [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and the notices bundled under `app/src/main/assets/licenses/`.
+
+## Hobby project disclaimer
+
+Duo Fold Live is a free, open-source hobby project, provided “as is” without warranties. Use it at your own risk. To the extent permitted by applicable law, the authors and contributors are not liable for device damage, data loss, malfunctions, or other harm arising from its use. Not affiliated with or endorsed by Samsung. See [LICENSE](LICENSE) for the full license terms.

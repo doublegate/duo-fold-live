@@ -10,29 +10,44 @@ public class FoldBackgroundService extends Service {
  private boolean wanted(){FoldAwakeDefault.persist(this);return true;}
  private LiveAngles angles;
  private FoldAwakeGuard awakeGuard;
+ private ClosureDiagnostics closureDiagnostics;
  private long asleepSince=-1,nextReaderAttempt;
  private String lastNotice="";
  private boolean lastReachable=false;
- private final rikka.shizuku.Shizuku.OnBinderReceivedListener binderReady=()->main.post(()->{RecoveryLog.add("Shizuku Binder received");FoldAwakeDefault.reconnect();kick();});
- private final rikka.shizuku.Shizuku.OnBinderDeadListener binderDead=()->main.post(()->{RecoveryLog.add("Shizuku Binder death notification");clearEffect();FoldAwakeDefault.reconnect();kick();});
- private final BroadcastReceiver screen=new BroadcastReceiver(){public void onReceive(Context c,Intent i){RecoveryLog.add("Background received "+i.getAction());if(Intent.ACTION_SCREEN_OFF.equals(i.getAction()))clearEffect();else nextReaderAttempt=0;FoldAwakeDefault.reconnect();kick();}};
+ private final rikka.shizuku.Shizuku.OnBinderReceivedListener binderReady=()->main.post(()->{RecoveryLog.add("Shizuku Binder received");resetHelpers("Shizuku connection refreshed");kick();});
+ private final rikka.shizuku.Shizuku.OnBinderDeadListener binderDead=()->main.post(()->{RecoveryLog.add("Shizuku Binder death notification");resetHelpers("Shizuku disconnected");kick();});
+ private final BroadcastReceiver screen=new BroadcastReceiver(){public void onReceive(Context c,Intent i){ClosureDiagnostics.screen(i.getAction());RecoveryLog.add("Background received "+i.getAction());if(Intent.ACTION_SCREEN_OFF.equals(i.getAction()))clearEffect();else nextReaderAttempt=0;FoldAwakeDefault.reconnect();kick();}};
  private final android.database.ContentObserver foldSettingObserver=new android.database.ContentObserver(main){
   @Override public void onChange(boolean selfChange){FoldAwakeDefault.reconnect();kick();}
  };
  private final Shizuku.OnRequestPermissionResultListener permissionResult=(requestCode,grantResult)->main.post(()->{FoldAwakeDefault.reconnect();kick();});
+ private void resetHelpers(String reason){
+  clearEffect();
+  if(angles!=null){angles.stop();angles=null;}
+  HelperBinding.reset(reason);nextReaderAttempt=0;
+  org.duofold.live.wallpaperlayer.WallpaperRestore.reconnect();
+  FoldAwakeDefault.reconnect();InnerDecorRecovery.reconnect();
+ }
  private void clearEffect(){StandaloneService service=StandaloneService.Companion.getInstance();if(service!=null)service.clearUnavailableEffect();}
  private void kick(){if(!running)return;main.removeCallbacks(supervise);main.post(supervise);}
+ public static void reconnectHelpers(Context c){c.startForegroundService(new Intent(c,FoldBackgroundService.class).setAction("RECONNECT_HELPERS"));}
  public static String connectionReport(){
-  try{return "Shizuku binder: "+(Shizuku.getBinder()==null?"absent":("alive="+Shizuku.getBinder().isBinderAlive()+", ping="+Shizuku.pingBinder()))+"; permission="+(Shizuku.pingBinder()?Shizuku.checkSelfPermission():"unavailable");}
+  try{return "Shizuku binder: "+(Shizuku.getBinder()==null?"absent":("alive="+Shizuku.getBinder().isBinderAlive()+", ping="+Shizuku.pingBinder()))+"; permission="+(Shizuku.pingBinder()?Shizuku.checkSelfPermission():"unavailable")+"; server="+Shizuku.getVersion()+"; UID="+Shizuku.getUid()+"\n"+HelperBinding.report();}
   catch(Exception e){return "Shizuku check: "+e.getClass().getSimpleName();}
  }
  public IBinder onBind(Intent i){return null;}
  public void onCreate(){super.onCreate();RecoveryLog.init(this);RecoveryLog.add("Background service created, PID "+android.os.Process.myPid());
+  closureDiagnostics=new ClosureDiagnostics(this,main);
   FoldAwakeDefault.persist(this);awakeGuard=new FoldAwakeGuard(this);awakeGuard.start();
   Shizuku.addBinderReceivedListenerSticky(binderReady);Shizuku.addBinderDeadListener(binderDead);Shizuku.addRequestPermissionResultListener(permissionResult);
   try{getContentResolver().registerContentObserver(android.provider.Settings.System.getUriFor("fold_lock_behavior"),false,foldSettingObserver);}catch(Exception e){RecoveryLog.add("Fold setting observer unavailable; periodic verification active");}
   IntentFilter filter=new IntentFilter();filter.addAction(Intent.ACTION_SCREEN_ON);filter.addAction(Intent.ACTION_SCREEN_OFF);filter.addAction(Intent.ACTION_USER_PRESENT);registerReceiver(screen,filter,Context.RECEIVER_NOT_EXPORTED);
-getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("fold_live","Fold animation running",NotificationManager.IMPORTANCE_LOW));}
+createNotificationChannel(this);}
+ public static void createNotificationChannel(Context context){
+  NotificationChannel channel=new NotificationChannel("fold_live","Fold animation running",NotificationManager.IMPORTANCE_LOW);
+  channel.setDescription("Routine running status. You can hide this category while Duo Fold Live keeps running.");
+  context.getSystemService(NotificationManager.class).createNotificationChannel(channel);
+ }
  private Notification notification(String message){
   PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE);
   PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,FoldBackgroundService.class).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE);
@@ -41,6 +56,7 @@ getSystemService(NotificationManager.class).createNotificationChannel(new Notifi
  public int onStartCommand(Intent i,int flags,int id){
   // Must promote even when restoring a now-disabled service, then stop cleanly.
   startForeground(112,notification("Connecting to the live angle reader"));lastNotice="";
+  if(i!=null&&"RECONNECT_HELPERS".equals(i.getAction()))resetHelpers("Manual helper reconnect");
   if(i!=null&&"STOP".equals(i.getAction())){
    getSharedPreferences("standalone",0).edit().putBoolean("enabled",false).apply();
    try{org.duofold.live.wallpaperlayer.WallpaperRestore.setEnabled(this,false);}catch(java.io.IOException e){RecoveryLog.add("Could not save wallpaper stop: "+e.getClass().getSimpleName());}
@@ -48,7 +64,7 @@ getSystemService(NotificationManager.class).createNotificationChannel(new Notifi
    if(!wanted()){stopSelf();return START_NOT_STICKY;}
   }
   if(!wanted()){stopSelf();return START_NOT_STICKY;}
-  if(!running){running=true;main.post(supervise);}
+  if(!running){running=true;main.post(supervise);}else if(i!=null&&"RECONNECT_HELPERS".equals(i.getAction()))kick();
   return START_STICKY;
  }
  private final Runnable supervise=new Runnable(){public void run(){
@@ -100,5 +116,5 @@ getSystemService(NotificationManager.class).createNotificationChannel(new Notifi
   main.postDelayed(this,2000);
  }};
  public void onTaskRemoved(Intent intent){RecoveryLog.add("Settings task dismissed; background service remains running");super.onTaskRemoved(intent);}
- public void onDestroy(){if(awakeGuard!=null)awakeGuard.close();RecoveryLog.add("Background service destroyed");Shizuku.removeBinderReceivedListener(binderReady);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionResult);getContentResolver().unregisterContentObserver(foldSettingObserver);try{unregisterReceiver(screen);}catch(Exception ignored){}running=false;main.removeCallbacksAndMessages(null);if(angles!=null){angles.stop();angles=null;}stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}
+ public void onDestroy(){if(closureDiagnostics!=null)closureDiagnostics.close();if(awakeGuard!=null)awakeGuard.close();RecoveryLog.add("Background service destroyed");Shizuku.removeBinderReceivedListener(binderReady);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionResult);getContentResolver().unregisterContentObserver(foldSettingObserver);try{unregisterReceiver(screen);}catch(Exception ignored){}running=false;main.removeCallbacksAndMessages(null);if(angles!=null){angles.stop();angles=null;}stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}
 }

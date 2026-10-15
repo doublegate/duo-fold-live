@@ -10,6 +10,8 @@ final class HandoffFadePolicy {
  /** Fold 7 unified: the closing reveal also waits for a real cover glass frame (else it lands on the dark capture fallback). */
  void coverGlass(boolean require){requireCoverGlass=require;}
  private float openThreshold=172;
+ private float handoff=HandoffSettings.DEFAULT;
+ void handoff(float value){handoff=HandoffSettings.angle(value);}
  private long readyAt=-1;
  String readiness="idle";
  void renderer(boolean requireGlass,float open){requireInnerGlass=requireGlass;openThreshold=FoldThreshold.sanitize(open);}
@@ -33,18 +35,25 @@ final class HandoffFadePolicy {
  void mapping(String id){if(physical!=null&&!physical.equals(id))mappingChanged=true;physical=id;}
  boolean transitioning(){return switched>=0;}
  static float approach(boolean inner,float angle){return approach(inner,angle,0);}
- static float approach(boolean inner,float angle,float gradualness){return approach(inner,angle,gradualness,DEFAULT_INNER_BLACK,DEFAULT_COVER_BLACK);}
+ static float approach(boolean inner,float angle,float gradualness){return approach(inner,angle,gradualness,HandoffSettings.DEFAULT);}
+ /** At the configured handoff angle: fully black at the hold angle closing and at the handoff angle opening. */
+ static float approach(boolean inner,float angle,float gradualness,float handoff){
+  handoff=HandoffSettings.angle(handoff);
+  return approach(inner,angle,gradualness,HandoffSettings.closing(handoff),handoff);
+ }
  /** innerBlack: angle where a closing inner panel is fully black; coverBlack: same for an opening cover panel. */
  static float approach(boolean inner,float angle,float gradualness,float innerBlack,float coverBlack){
   float width=FadeSettings.span(gradualness);
   float x=Math.max(0,Math.min(1,inner?(innerBlack+width-angle)/width:(angle-(coverBlack-width))/width));
   return x*x*(3-2*x);
  }
- static final float DEFAULT_INNER_BLACK=94,DEFAULT_COVER_BLACK=98;
- /** Samsung switches panels at different hinge angles per generation. Fold7 (SM-F966U1, One UI 8.5) measured 92-94 closing, 101-102 opening. */
- static float[] blackAnglesFor(String model){
-  return DeviceCompatibility.isFold7(model)?new float[]{94,101}:new float[]{DEFAULT_INNER_BLACK,DEFAULT_COVER_BLACK};
- }
+ /**
+  * Degrees past the handoff angle at which the panels actually switch while opening; closing switches at the hold
+  * angle. Fold7 (SM-F966U1, One UI 8.5) measured 92-94 closing and 101-102 opening at a 98 deg handoff: +3.
+  */
+ static float coverLagFor(String model){return DeviceCompatibility.isFold7(model)?3:0;}
+ /** {closing black, opening black} for this model at the given handoff angle (94 / 101 on a Fold7 at 98). */
+ static float[] blackAnglesFor(String model,float handoff){handoff=HandoffSettings.angle(handoff);return new float[]{HandoffSettings.closing(handoff),handoff+coverLagFor(model)};}
  /**
   * Upper bound on solid black after the destination panel turns ON. Duo draws only when a new angle
   * arrives, and on the Fold7 the wallpaper sends none for 0.3-0.5 s after a panel switch, so waiting
@@ -82,11 +91,8 @@ final class HandoffFadePolicy {
  private long closingReadyTimeout=-1;
  void closingReadyTimeout(long ms){closingReadyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:-1;}
  void openingReadyTimeout(long ms){openingReadyTimeout=ms>=ON_SETTLE_MS&&ms<=READY_TIMEOUT_MS?ms:-1;}
- private float innerBlack=DEFAULT_INNER_BLACK,coverBlack=DEFAULT_COVER_BLACK;
- void blackAngles(float inner,float cover){
-  boolean ok=Float.isFinite(inner)&&Float.isFinite(cover)&&inner>=60&&inner<=130&&cover>=60&&cover<=130;
-  innerBlack=ok?inner:DEFAULT_INNER_BLACK;coverBlack=ok?cover:DEFAULT_COVER_BLACK;
- }
+ private float coverLag;
+ void coverLag(float degrees){coverLag=Float.isFinite(degrees)&&degrees>=0&&degrees<=10?degrees:0;}
  float opacity(long now,boolean inner,float angle,boolean valid,boolean on,long drawn,boolean drawnInner){
   return opacity(now,inner,angle,valid,on,drawn,drawnInner,UI_DRAW,-1);
  }
@@ -125,7 +131,7 @@ final class HandoffFadePolicy {
    if(x<1)return 1-x*x*(3-2*x);
    switched=reveal=-1;
   }
-  float mid=(innerBlack+coverBlack)/2;
+  float innerBlack=HandoffSettings.closing(handoff),coverBlack=handoff+coverLag,mid=(innerBlack+coverBlack)/2;
   if(!armed&&(inner?(angle>=mid+FadeSettings.span(gradualness)||angle<=arrival-2):(angle<=mid-FadeSettings.span(gradualness)||angle>=arrival+2)))armed=true;
   float alpha=armed?approach(inner,angle,gradualness,innerBlack,coverBlack):0;
   if(alpha<=0){blackSince=-1;expired=false;}

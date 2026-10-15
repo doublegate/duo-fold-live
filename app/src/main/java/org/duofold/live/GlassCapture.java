@@ -36,22 +36,40 @@ final class GlassCapture extends Binder {
     String observed=command("settings","get","system","fold_lock_behavior").trim();
     if(!expected.equals(observed))throw new IllegalStateException("Fold setting readback mismatch: "+observed);
     result.putString("previous",previous);result.putString("value",observed);result.putBoolean("ok",true);
-   }else if(code==1 || code==3){
+   }else if(code==4){
+    int task=data.readInt();String physical=data.readString();int expectedWidth=data.readInt(),expectedHeight=data.readInt();
+    Object wm=service("window","android.view.IWindowManager$Stub");
+    if((boolean)Class.forName("android.view.IWindowManager").getMethod("isKeyguardLocked").invoke(wm))throw new IllegalStateException("Locked");
+    Object dm=service("display","android.hardware.display.IDisplayManager$Stub");
+    Object info=Class.forName("android.hardware.display.IDisplayManager").getMethod("getDisplayInfo",int.class).invoke(dm,0);
+    if(info==null||!java.util.Objects.equals(physical,String.valueOf(info.getClass().getField("uniqueId").get(info)))||info.getClass().getField("state").getInt(info)!=2)throw new IllegalStateException("Incoming panel not ON on D0");
+    int width=info.getClass().getField("logicalWidth").getInt(info),height=info.getClass().getField("logicalHeight").getInt(info);
+    if(Math.min(width,height)!=Math.min(expectedWidth,expectedHeight)||Math.max(width,height)!=Math.max(expectedWidth,expectedHeight))throw new IllegalStateException("Waiting for destination dimensions");
+    String state=EndpointWindowState.summarize(EndpointWindowTrace.dump(),task);
+    result.putBoolean("ok",state.equals("READY; HAS_DRAWN"));result.putString("error",state);
+   }else if(code==1 || code==3 || code==5){
     long captureStarted=SystemClock.elapsedRealtime();
-    int n=data.readInt();if(n<1||n>4)throw new IllegalArgumentException("No valid overlay exclusion surfaces");
+    int n=data.readInt();if(n<1||n>8)throw new IllegalArgumentException("No valid overlay exclusion surfaces");
     excluded=new SurfaceControl[n];for(int i=0;i<n;i++)excluded[i]=data.readTypedObject(SurfaceControl.CREATOR);
-    int displayId=code==1&&data.dataAvail()>=4?data.readInt():0;
+    int displayId=(code==1||code==5)&&data.dataAvail()>=4?data.readInt():0;
+    int exactTask=code==5?data.readInt():-1;
+    String expectedPhysical=code==5?data.readString():null;
     if(displayId<0||displayId>1)throw new IllegalArgumentException("Unsupported capture display");
     for(SurfaceControl sc:excluded)if(sc==null||!sc.isValid())throw new IllegalStateException("Overlay surface changed");
     Object wm=service("window","android.view.IWindowManager$Stub");Class<?> wa=Class.forName("android.view.IWindowManager");
     if((boolean)wa.getMethod("isKeyguardLocked").invoke(wm))throw new IllegalStateException("Locked — capture paused");
     Object dm=service("display","android.hardware.display.IDisplayManager$Stub");Object info=Class.forName("android.hardware.display.IDisplayManager").getMethod("getDisplayInfo",int.class).invoke(dm,displayId);
+    if(code==5){
+     if(exactTask<0||!java.util.Objects.equals(expectedPhysical,String.valueOf(info.getClass().getField("uniqueId").get(info))))throw new IllegalStateException("Incoming identity changed");
+     if(!EndpointWindowState.summarize(EndpointWindowTrace.dump(),exactTask,displayId).equals("READY; HAS_DRAWN"))throw new IllegalStateException("Exact incoming app not drawn");
+    }
     int w=info.getClass().getField("logicalWidth").getInt(info),h=info.getClass().getField("logicalHeight").getInt(info);
+    int rotation=info.getClass().getField("rotation").getInt(info);
     if(info.getClass().getField("state").getInt(info)!=2)throw new IllegalStateException("Screen off — capture paused");
     if(captureApi==null)captureApi=DisplayCaptureApi.resolve(Class::forName,wa,Rect.class,SurfaceControl[].class);
     Class<?> builder=captureApi.builder;Object b=captureApi.constructor.newInstance();
     builder.getMethod("setSourceCrop",Rect.class).invoke(b,new Rect(0,0,w,h));
-    builder.getMethod("setFrameScale",float.class).invoke(b,Math.min(1f,(code==3?1440f:640f)/Math.max(w,h)));
+    builder.getMethod("setFrameScale",float.class).invoke(b,Math.min(1f,(code==1?640f:1440f)/Math.max(w,h)));
     SurfaceControl[] extra=RecordVisible.exclusionCopies(exclusionCopies);  // own handles (plan D4), released below
     SurfaceControl[] all=extra.length==0?excluded:java.util.Arrays.copyOf(excluded,excluded.length+extra.length);
     if(extra.length>0)System.arraycopy(extra,0,all,excluded.length,extra.length);
@@ -76,9 +94,10 @@ final class GlassCapture extends Binder {
     if(hardware==null)throw new IllegalStateException("No readable frame");
     Bitmap bitmap=hardware.copy(Bitmap.Config.ARGB_8888,false);hardware.recycle();
     Object after=Class.forName("android.hardware.display.IDisplayManager").getMethod("getDisplayInfo",int.class).invoke(dm,displayId);
-    if(after==null || after.getClass().getField("state").getInt(after)!=2 || after.getClass().getField("logicalWidth").getInt(after)!=w || after.getClass().getField("logicalHeight").getInt(after)!=h ||
+    if(after==null || after.getClass().getField("state").getInt(after)!=2 || after.getClass().getField("logicalWidth").getInt(after)!=w || after.getClass().getField("logicalHeight").getInt(after)!=h || after.getClass().getField("rotation").getInt(after)!=rotation ||
        !java.util.Objects.equals(info.getClass().getField("uniqueId").get(info),after.getClass().getField("uniqueId").get(after))){bitmap.recycle();throw new IllegalStateException("Panel changed during capture; retry before handoff");}
-    result.putParcelable("bitmap",bitmap);result.putInt("width",w);result.putInt("height",h);result.putLong("stamp",captureStarted);result.putBoolean("ok",true);
+    if(code==5&&!EndpointWindowState.summarize(EndpointWindowTrace.dump(),exactTask,displayId).equals("READY; HAS_DRAWN")){bitmap.recycle();throw new IllegalStateException("Exact app moved during capture");}
+    result.putString("physicalId",String.valueOf(info.getClass().getField("uniqueId").get(info)));result.putInt("displayId",displayId);result.putParcelable("bitmap",bitmap);result.putInt("width",w);result.putInt("height",h);result.putInt("rotation",rotation);result.putLong("stamp",captureStarted);result.putBoolean("ok",true);
    }else throw new IllegalArgumentException("Unknown operation");
   }catch(Exception e){Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();result.putString("error",cause.getClass().getSimpleName()+": "+cause.getMessage());}
   finally{if(buffer!=null)buffer.close();for(SurfaceControl sc:excluded)if(sc!=null)sc.release();for(SurfaceControl sc:exclusionCopies)sc.release();Binder.restoreCallingIdentity(identity);}
